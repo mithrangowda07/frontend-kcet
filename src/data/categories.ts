@@ -1,0 +1,28 @@
+// Hardcoded list of 24 categories as fallback
+export const HARDCODED_CATEGORIES = [
+  { category: '1R', fall_back: '1R,1G,GM' },
+  { category: '1K', fall_back: '1K,1G,GM' },
+  { category: '1G', fall_back: '1G,GM' },
+  { category: '2AR', fall_back: '2AR,2AG,GM' },
+  { category: '2AK', fall_back: '2AK,2AG,GM' },
+  { category: '2AG', fall_back: '2AG,GM' },
+  { category: '2BR', fall_back: '2BR,2BG,GM' },
+  { category: '2BK', fall_back: '2BK,2BG,GM' },
+  { category: '2BG', fall_back: '2BG,GM' },
+  { category: '3AK', fall_back: '3AK,3AG,GM' },
+  { category: '3AR', fall_back: '3AR,3AG,GM' },
+  { category: '3AG', fall_back: '3AG,GM' },
+  { category: '3BK', fall_back: '3BK,3BG,GM' },
+  { category: '3BR', fall_back: '3BR,3BG,GM' },
+  { category: '3BG', fall_back: '3BG,GM' },
+  { category: 'STK', fall_back: 'STK,STG,GM' },
+  { category: 'STR', fall_back: 'STR,STG,GM' },
+  { category: 'STG', fall_back: 'STG,GM' },
+  { category: 'SCK', fall_back: 'SCK,SCG,GM' },
+  { category: 'SCR', fall_back: 'SCR,SCG,GM' },
+  { category: 'SCG', fall_back: 'SCG,GM' },
+  { category: 'GMR', fall_back: 'GMR,GM' },
+  { category: 'GMK', fall_back: 'GMK,GM' },
+  { category: 'GM', fall_back: 'GM' },
+]
+
