@@ -313,6 +313,21 @@ const ProfilePage = () => {
                   className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
                 />
               </div>
+
+              {/* KCET Rank (read-only for studying) */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">KCET Rank</label>
+                <input
+                  type="number"
+                  name="kcet_rank"
+                  value={formData.kcet_rank}
+                  disabled
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-gray-400 cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                  KCET Rank is fixed based on registration.
+                </p>
+              </div>
             </>
           )}
 

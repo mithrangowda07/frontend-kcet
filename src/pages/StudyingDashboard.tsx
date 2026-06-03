@@ -62,7 +62,7 @@ const StudyingDashboard = () => {
   const resolveUniqueKey = () => {
     if (!user?.unique_key) return "";
     if (typeof user.unique_key === "string") return user.unique_key;
-    return user.unique_key.unique_key || user.unique_key._id || "";
+    return user.unique_key.unique_key || "";
   };
 
   const resolvedUniqueKey = resolveUniqueKey();

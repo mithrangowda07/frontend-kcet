@@ -117,34 +117,6 @@ const LoginRegister = () => {
           // Old verification flow removed - redirect to new registration
           navigate("/register/studying");
           return;
-          if (verifiedData) {
-            try {
-              const data = JSON.parse(verifiedData);
-              if (data.verified && data.usn) {
-                // Find college by name to get college_code
-                const verifiedCollege = collegeList.find(
-                  (c) => c.college_name === data.college_name
-                );
-                
-                setFormData((prev) => ({
-                  ...prev,
-                  usn: data.usn,
-                  name: data.student_name || prev.name,
-                  college_code: verifiedCollege?.college_code || prev.college_code,
-                }));
-                
-                // Load branches if college is found
-                if (verifiedCollege?.college_code) {
-                  branchService
-                    .byCollegeCode(verifiedCollege.college_code)
-                    .then(setBranches)
-                    .catch(() => setBranches([]));
-                }
-              }
-            } catch (e) {
-              console.error("Error parsing verified student data:", e);
-            }
-          }
         })
         .catch(() => setColleges([]));
     }

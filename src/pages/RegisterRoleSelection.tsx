@@ -1,9 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { useTheme } from '../contexts/ThemeContext'
 
 const RegisterRoleSelection = () => {
   const navigate = useNavigate()
-  const { theme } = useTheme()
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#111827] px-4 py-12">

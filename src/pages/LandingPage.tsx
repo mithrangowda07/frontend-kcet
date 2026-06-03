@@ -23,7 +23,7 @@ const LandingPage = () => {
   // autoplay play/pause logic
   useEffect(() => {
     const btn = document.getElementById("swiperPlayPause");
-    const swiperInstance = document.querySelector(".mySwiper")?.swiper;
+    const swiperInstance = (document.querySelector(".mySwiper") as any)?.swiper;
     if (!swiperInstance || !btn) return;
 
     let isPlaying = true;

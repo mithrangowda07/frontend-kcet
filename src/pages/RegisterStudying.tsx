@@ -25,6 +25,7 @@ const RegisterStudying = () => {
     usn: '',
     category: '',
     id_card_image: null as File | null,
+    kcet_rank: '',
   })
 
   const [previewImage, setPreviewImage] = useState<string | null>(null)
@@ -174,6 +175,11 @@ const RegisterStudying = () => {
         setLoading(false)
         return
       }
+      if (!formData.kcet_rank || parseInt(formData.kcet_rank, 10) <= 0) {
+        setError('Valid KCET rank is required')
+        setLoading(false)
+        return
+      }
       if (!formData.id_card_image) {
         setError('Student ID card upload is required')
         setLoading(false)
@@ -193,6 +199,7 @@ const RegisterStudying = () => {
         year_of_starting: parseInt(formData.year_of_starting, 10),
         usn: formData.usn.trim(),
         id_card_url,
+        kcet_rank: parseInt(formData.kcet_rank, 10),
       }
       payload.category = formData.category
 
@@ -214,6 +221,7 @@ const RegisterStudying = () => {
         usn: '',
         category: '',
         id_card_image: null,
+        kcet_rank: '',
       })
       setPreviewImage(null)
     } catch (err: any) {
@@ -455,6 +463,30 @@ const RegisterStudying = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label
+                  htmlFor="kcet_rank"
+                  className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2"
+                >
+                  KCET Rank *
+                </label>
+                <input
+                  type="number"
+                  id="kcet_rank"
+                  name="kcet_rank"
+                  value={formData.kcet_rank}
+                  onChange={handleInputChange}
+                  required
+                  min="1"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-gray-600 rounded-lg
+                             bg-white dark:bg-gray-700 text-slate-900 dark:text-white
+                             focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent"
+                  placeholder="Enter your KCET rank"
+                />
               </div>
             </div>
 

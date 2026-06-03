@@ -1,4 +1,14 @@
-const CustomTooltip = ({ active, payload, label }) => {
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: any;
+    color: string;
+  }>;
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="p-3 rounded-md shadow-md border
