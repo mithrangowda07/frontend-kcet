@@ -2,204 +2,253 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { meetingService } from '../services/api'
 import type { Meeting } from '../types'
+import MeetingCard from '../components/MeetingCard'
 
-const MeetingPage = () => {
+export default function MeetingPage() {
   const { user, loading: authLoading } = useAuth()
-  const [requests, setRequests] = useState<Meeting[]>([])
-  const [invitations, setInvitations] = useState<Meeting[]>([])
+  
+  // States for Counselling Student
+  const [exploreMeetings, setExploreMeetings] = useState<Meeting[]>([])
+  const [registeredMeetings, setRegisteredMeetings] = useState<Meeting[]>([])
+  const [counsellingTab, setCounsellingTab] = useState<'explore' | 'registered'>('explore')
+
+  // States for Studying Student
+  const [hostedMeetings, setHostedMeetings] = useState<Meeting[]>([])
+  const [studyingTab, setStudyingTab] = useState<'upcoming' | 'history'>('upcoming')
+
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Only load meetings if user is authenticated and not loading
-    // Also check if we have tokens in localStorage
-    const hasTokens = typeof window !== 'undefined' && localStorage.getItem('tokens');
-    if (!authLoading && user && hasTokens) {
-      loadMeetings()
+    if (!authLoading && user) {
+      loadData()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user])
 
-  const loadMeetings = async () => {
+  const loadData = async () => {
     setLoading(true)
+    setError(null)
     try {
       if (user?.type_of_student === 'counselling') {
-        const data = await meetingService.myRequests()
-        setRequests(Array.isArray(data) ? data : [])
-      } else {
-        const data = await meetingService.myInvitations()
-        setInvitations(Array.isArray(data) ? data : [])
+        const [approved, registered] = await Promise.all([
+          meetingService.getApproved(),
+          meetingService.getRegistered(),
+        ])
+        setExploreMeetings(approved || [])
+        setRegisteredMeetings(registered || [])
+      } else if (user?.type_of_student === 'studying') {
+        const hosted = await meetingService.getHostMeetings()
+        setHostedMeetings(hosted || [])
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading meetings:', err)
-      // Set empty arrays on error to prevent UI issues
-      if (user?.type_of_student === 'counselling') {
-        setRequests([])
-      } else {
-        setInvitations([])
-      }
+      setError('Failed to fetch meeting sessions. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleStatusUpdate = async (meetingId: number, status: string) => {
+  const handleRegister = async (meetingId: string) => {
     try {
-      await meetingService.updateStatus(meetingId, status)
-      await loadMeetings()
+      await meetingService.register(meetingId)
+      alert('Successfully registered for the session! Confirmation email has been sent.')
+      await loadData()
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Error updating meeting status')
+      alert(err.response?.data?.error || 'Registration failed')
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'accepted':
-        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-      case 'rejected':
-        return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
-      case 'completed':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
-      case 'cancelled':
-        return 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-gray-300'
-      default:
-        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
+  const handleJoin = async (meetingId: string) => {
+    try {
+      const { meetingLink } = await meetingService.join(meetingId)
+      if (meetingLink) {
+        window.open(meetingLink, '_blank')
+        await loadData()
+      } else {
+        alert('Meeting link is not available yet.')
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Unable to join meeting')
     }
+  }
+
+  const isAlreadyRegistered = (meetingId: string) => {
+    return registeredMeetings.some((m) => m._id === meetingId)
+  }
+
+  const filterStudyingMeetings = () => {
+    const now = new Date()
+    if (studyingTab === 'upcoming') {
+      return hostedMeetings.filter(
+        (m) => m.status === 'APPROVED' && new Date(m.endTime) > now
+      )
+    } else {
+      return hostedMeetings.filter(
+        (m) => m.status !== 'APPROVED' || new Date(m.endTime) <= now
+      )
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+      </div>
+    )
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-gray-100">Meetings</h1>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          👥 Group Guidance Meetings
+        </h1>
+        <p className="mt-2 text-sm sm:text-base text-slate-500 dark:text-slate-400">
+          Connect with peers and experienced seniors for interactive group counselling, sharing advice, and tips.
+        </p>
+      </div>
 
-      {user?.type_of_student === 'counselling' && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4 text-slate-800 dark:text-gray-100">My Meeting Requests</h2>
-          {loading ? (
-            <div className="text-center py-12 text-slate-600 dark:text-gray-400">Loading...</div>
-          ) : requests.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md text-center text-slate-500 dark:text-gray-400 border border-slate-300 dark:border-slate-700">
-              No meeting requests yet
+      {error && (
+        <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 rounded-xl border border-rose-200 dark:border-rose-800 text-sm">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        </div>
+      )}
+
+      {!loading && user?.type_of_student === 'counselling' && (
+        <div className="space-y-6">
+          {/* Counselling Student Tabs */}
+          <div className="flex border-b border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setCounsellingTab('explore')}
+              className={`py-3 px-6 font-semibold text-sm border-b-2 transition ${
+                counsellingTab === 'explore'
+                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              🔍 Explore Sessions
+            </button>
+            <button
+              onClick={() => setCounsellingTab('registered')}
+              className={`py-3 px-6 font-semibold text-sm border-b-2 transition relative ${
+                counsellingTab === 'registered'
+                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              🗓️ My Registered Sessions
+              {registeredMeetings.length > 0 && (
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-600 text-white dark:bg-indigo-500">
+                  {registeredMeetings.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Tab Contents */}
+          {counsellingTab === 'explore' ? (
+            exploreMeetings.length === 0 ? (
+              <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8">
+                <p className="text-slate-500 dark:text-gray-400 text-base mb-2">No upcoming approved meeting sessions available.</p>
+                <p className="text-xs text-slate-400 dark:text-gray-500">Check back later for newly scheduled guidance meets.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exploreMeetings.map((meeting) => (
+                  <MeetingCard
+                    key={meeting._id}
+                    meeting={meeting}
+                    isRegistered={isAlreadyRegistered(meeting._id!)}
+                    userRole="counselling"
+                    onRegister={() => handleRegister(meeting._id!)}
+                    onJoin={() => handleJoin(meeting._id!)}
+                  />
+                ))}
+              </div>
+            )
+          ) : registeredMeetings.length === 0 ? (
+            <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8">
+              <p className="text-slate-500 dark:text-gray-400 text-base mb-2">You haven't registered for any upcoming meeting sessions.</p>
+              <button
+                onClick={() => setCounsellingTab('explore')}
+                className="mt-4 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow"
+              >
+                Browse Upcoming Sessions
+              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {requests.map(meeting => (
-                <div key={meeting.meeting_id} className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border border-slate-300 dark:border-slate-700">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-semibold text-slate-800 dark:text-gray-100">
-                        Meeting with: {meeting.studying_user_id_data?.name || meeting.studying_user_id_data?.email_id || meeting.studying_user_id}
-                      </p>
-                      <p className="text-sm text-slate-600 dark:text-gray-400">
-                        Status: <span className={`px-2 py-1 rounded ${getStatusColor(meeting.status)}`}>
-                          {meeting.status}
-                        </span>
-                      </p>
-                      {meeting.scheduled_time && (
-                        <p className="text-sm text-slate-600 dark:text-gray-400">
-                          Scheduled: {new Date(meeting.scheduled_time).toLocaleString()}
-                        </p>
-                      )}
-                      {meeting.meet_link && meeting.status !== 'completed' && (
-                        <a
-                          href={meeting.meet_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-sky-400 hover:underline text-sm mt-2 inline-block"
-                        >
-                          Join Jitsi Meet
-                        </a>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {meeting.status === 'accepted' && (
-                        <button
-                          onClick={() => handleStatusUpdate(meeting.meeting_id, 'completed')}
-                          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                        >
-                          Mark Completed
-                        </button>
-                      )}
-                      {['requested', 'accepted'].includes(meeting.status) && (
-                        <button
-                          onClick={() => handleStatusUpdate(meeting.meeting_id, 'Cancelled')}
-                          className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {registeredMeetings.map((meeting) => (
+                <MeetingCard
+                  key={meeting._id}
+                  meeting={meeting}
+                  isRegistered={true}
+                  userRole="counselling"
+                  onJoin={() => handleJoin(meeting._id!)}
+                />
               ))}
             </div>
           )}
         </div>
       )}
 
-      {user?.type_of_student === 'studying' && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4 text-slate-800 dark:text-gray-100">Meeting Invitations</h2>
-          {loading ? (
-            <div className="text-center py-12 text-slate-600 dark:text-gray-400">Loading...</div>
-          ) : invitations.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md text-center text-slate-500 dark:text-gray-400 border border-slate-300 dark:border-slate-700">
-              No meeting invitations
+      {!loading && user?.type_of_student === 'studying' && (
+        <div className="space-y-6">
+          {/* Studying Student Tabs */}
+          <div className="flex border-b border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setStudyingTab('upcoming')}
+              className={`py-3 px-6 font-semibold text-sm border-b-2 transition ${
+                studyingTab === 'upcoming'
+                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              🚀 Upcoming Hosted Sessions
+            </button>
+            <button
+              onClick={() => setStudyingTab('history')}
+              className={`py-3 px-6 font-semibold text-sm border-b-2 transition ${
+                studyingTab === 'history'
+                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              📂 Request History & Completed
+            </button>
+          </div>
+
+          {/* Tab Contents */}
+          {filterStudyingMeetings().length === 0 ? (
+            <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8">
+              <p className="text-slate-500 dark:text-gray-400 text-base mb-2">
+                {studyingTab === 'upcoming'
+                  ? 'No upcoming approved group sessions found.'
+                  : 'No meeting request history or past sessions found.'}
+              </p>
+              {studyingTab === 'upcoming' && (
+                <p className="text-xs text-slate-400 dark:text-gray-500">
+                  Submit a meeting request from your Studying Dashboard to schedule a session.
+                </p>
+              )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {invitations.map(meeting => (
-                <div key={meeting.meeting_id} className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border border-slate-300 dark:border-slate-700">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-semibold text-slate-800 dark:text-gray-100">
-                        Request from: {meeting.counselling_user_id_data?.name || meeting.counselling_user_id_data?.email_id || meeting.counselling_user_id}
-                      </p>
-                      <p className="text-sm text-slate-600 dark:text-gray-400">
-                        Status: <span className={`px-2 py-1 rounded ${getStatusColor(meeting.status)}`}>
-                          {meeting.status}
-                        </span>
-                      </p>
-                      {meeting.scheduled_time && (
-                        <p className="text-sm text-slate-600 dark:text-gray-400">
-                          Scheduled: {new Date(meeting.scheduled_time).toLocaleString()}
-                        </p>
-                      )}
-                      {meeting.meet_link && meeting.status !== 'completed' && (
-                        <a
-                          href={meeting.meet_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-sky-400 hover:underline text-sm mt-2 inline-block"
-                        >
-                          Join Jitsi Meet
-                        </a>
-                      )}
-                    </div>
-                    {meeting.status === 'requested' && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleStatusUpdate(meeting.meeting_id, 'accepted')}
-                          className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => handleStatusUpdate(meeting.meeting_id, 'rejected')}
-                          className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
-                    {meeting.status === 'accepted' && (
-                      <button
-                        onClick={() => handleStatusUpdate(meeting.meeting_id, 'completed')}
-                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                      >
-                        Mark Completed
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filterStudyingMeetings().map((meeting) => (
+                <MeetingCard
+                  key={meeting._id}
+                  meeting={meeting}
+                  isRegistered={false}
+                  userRole="studying"
+                  onJoin={() => handleJoin(meeting._id!)}
+                />
               ))}
             </div>
           )}
@@ -208,6 +257,3 @@ const MeetingPage = () => {
     </div>
   )
 }
-
-export default MeetingPage
-

@@ -113,7 +113,7 @@ const BranchInsightsModal = ({
                       Pros
                     </p>
                     <ul className="list-disc list-inside space-y-1">
-                      {data.pros_cons.pros.length ? (
+                      {(data.pros_cons?.pros?.length ?? 0) ? (
                         data.pros_cons.pros.map((item, idx) => (
                           <li key={idx}>{item}</li>
                         ))
@@ -127,7 +127,7 @@ const BranchInsightsModal = ({
                       Cons / Watch-outs
                     </p>
                     <ul className="list-disc list-inside space-y-1">
-                      {data.pros_cons.cons.length ? (
+                      {(data.pros_cons?.cons?.length ?? 0) ? (
                         data.pros_cons.cons.map((item, idx) => (
                           <li key={idx}>{item}</li>
                         ))
@@ -142,7 +142,7 @@ const BranchInsightsModal = ({
               {/* 5. Key Features */}
               <section>
                 <SectionTitle>5. Key Features of this Branch</SectionTitle>
-                {data.features.length ? (
+                {(data.features?.length ?? 0) ? (
                   <ul className="list-disc list-inside space-y-1">
                     {data.features.map((feature, idx) => (
                       <li key={idx}>{feature}</li>
@@ -169,7 +169,7 @@ const BranchInsightsModal = ({
                 <SectionTitle>
                   7. Additional Useful Information for Freshers
                 </SectionTitle>
-                {data.additional_info.length ? (
+                {(data.additional_info?.length ?? 0) ? (
                   <ul className="list-disc list-inside space-y-1">
                     {data.additional_info.map((item, idx) => (
                       <li key={idx}>{item}</li>

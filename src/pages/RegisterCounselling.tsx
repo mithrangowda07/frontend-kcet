@@ -81,6 +81,11 @@ const RegisterCounselling = () => {
         setLoading(false)
         return
       }
+      if (!formData.category) {
+        setError('Category is required')
+        setLoading(false)
+        return
+      }
 
       const registerData = {
         name: formData.name.trim(),
@@ -89,7 +94,7 @@ const RegisterCounselling = () => {
         password: formData.password,
         password_confirm: formData.password_confirm,
         kcet_rank: parseInt(formData.kcet_rank),
-        category: formData.category || null,
+        category: formData.category,
       }
 
       const response = await authService.registerCounselling(registerData)
@@ -210,7 +215,7 @@ const RegisterCounselling = () => {
                 htmlFor="kcet_rank"
                 className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2"
               >
-                KCET Rank *
+                Rank *
               </label>
               <input
                 type="number"
@@ -232,18 +237,19 @@ const RegisterCounselling = () => {
                 htmlFor="category"
                 className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2"
               >
-                Category
+                Category *
               </label>
               <select
                 id="category"
                 name="category"
                 value={formData.category}
                 onChange={handleInputChange}
+                required
                 className="w-full px-4 py-2 border border-slate-300 dark:border-gray-600 rounded-lg
                            bg-white dark:bg-gray-700 text-slate-900 dark:text-white
                            focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
               >
-                <option value="">Select category (optional)</option>
+                <option value="">Select category</option>
                 {categories.map((cat) => (
                   <option key={cat.category} value={cat.category}>
                     {cat.category}

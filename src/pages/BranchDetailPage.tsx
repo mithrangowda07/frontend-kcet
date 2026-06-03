@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { branchService, reviewService, meetingService } from "../services/api";
+import { branchService, reviewService } from "../services/api";
 import StarRating from "../components/StarRating";
 import CustomTooltip from "../components/charts/CustomTooltip";
 import type { Branch, Review, BranchInsightsResponse } from "../types";
@@ -46,6 +46,11 @@ type SeatPrediction = {
   effectiveCategory: string;
   explanation: string;
   usedCutoff: number;
+};
+
+type BranchReviewResponse = {
+  reviews: Review[];
+  average_ratings?: Record<string, number>;
 };
 
 // Fallback chains
@@ -164,91 +169,153 @@ const scoreProbability = (
   return Math.max(0, Math.min(1, prob));
 };
 
-const pickBestOutcome = (
-  rank: number,
-  category: string,
-  cutoff: BranchCutoffResponse | null
-): SeatPrediction | null => {
-  if (!cutoff?.categories) return null;
-  const chain = computeFallbackChain(category, cutoff.fall_back);
-
-  let best: SeatPrediction | null = null;
-  chain.forEach((cat, idx) => {
-    const stats = computeRoundStats(cutoff.categories?.[cat]);
-    stats.forEach((stat) => {
-      const probability = scoreProbability(rank, stat, idx);
-      if (!best || probability > best.probability) {
-        const effectiveCategory = cat;
-        best = {
-          probability,
-          level: chanceLevel(probability),
-          round: roundKeyLabel[stat.round],
-          effectiveCategory,
-          usedCutoff: stat.latest || stat.avg,
-          explanation: `Using ${effectiveCategory} fall-back and ${
-            roundKeyLabel[stat.round]
-          }, historical avg cutoff is ${Math.round(stat.avg || stat.latest)}.`,
-        };
-      }
-    });
-  });
-  return best;
-};
-
 const buildDecisionFromData = (
-  category: string,
+  primaryCategory: string,
   cutoff: BranchCutoffResponse | null
-): {
-  recommendedRank: number;
-  round: string;
-  fallbackCategory: string;
-  competition: "Low" | "Medium" | "High";
-  confidence: number;
-  probability: number;
-} | null => {
-  if (!cutoff?.categories) return null;
+) => {
+  if (!cutoff || !cutoff.categories) return null;
 
-  const chain = computeFallbackChain(category, cutoff.fall_back);
-  let bestStat: { stat: RoundStat; cat: string } | null = null;
+  const chain = computeFallbackChain(primaryCategory, cutoff.fall_back);
+  
+  // Find the first category in the chain that has data
+  let targetCategory = primaryCategory;
+  let targetData = cutoff.categories[primaryCategory];
+  let fallbackIndex = 0;
 
-  for (const cat of chain) {
-    const stats = computeRoundStats(cutoff.categories?.[cat]);
-    for (const stat of stats) {
-      const weighted = (stat.latest || stat.avg) * ROUND_WEIGHTS[stat.round];
-      const currentWeighted = bestStat
-        ? (bestStat.stat.latest || bestStat.stat.avg) *
-          ROUND_WEIGHTS[bestStat.stat.round]
-        : -Infinity;
-      if (!bestStat || weighted > currentWeighted) {
-        bestStat = { stat, cat };
+  if (!targetData) {
+    for (let i = 0; i < chain.length; i++) {
+      if (cutoff.categories[chain[i]]) {
+        targetCategory = chain[i];
+        targetData = cutoff.categories[chain[i]];
+        fallbackIndex = i;
+        break;
       }
     }
   }
 
-  if (!bestStat) return null;
+  if (!targetData) return null;
 
-  const { stat, cat } = bestStat as { stat: RoundStat; cat: string };
-  const roundKey: RoundKey = stat.round;
-  const baselineRank = stat.latest || stat.avg;
-  const confidenceBase = 50 + stat.coverage * 10 + (stat.trend > 0 ? 8 : 0);
-  const probability = Math.min(
-    1,
-    0.65 * ROUND_WEIGHTS[roundKey] + (stat.trend > 0 ? 0.08 : -0.04)
-  );
-  const confidence = Math.max(40, Math.min(98, confidenceBase));
+  const stats = computeRoundStats(targetData);
+  if (stats.length === 0) return null;
+
+  // Filter out rounds with no data
+  const validStats = stats.filter((s) => s.avg > 0);
+  if (validStats.length === 0) return null;
+
+  // Pick the best round (highest latest cutoff or average)
+  let bestRoundStat = validStats[0];
+  for (const stat of validStats) {
+    const val = stat.latest || stat.avg;
+    const bestVal = bestRoundStat.latest || bestRoundStat.avg;
+    if (val > bestVal) {
+      bestRoundStat = stat;
+    }
+  }
+
+  const recommendedRank = Math.round(bestRoundStat.latest || bestRoundStat.avg);
+  const roundLabel = roundKeyLabel[bestRoundStat.round];
+
+  const fallbackCategory = chain.find((c) => c !== targetCategory && cutoff.categories?.[c]) || "GM";
+
+  // Competition based on trend
+  let competition = "Medium";
+  if (bestRoundStat.trend < -0.05) {
+    competition = "High";
+  } else if (bestRoundStat.trend > 0.05) {
+    competition = "Low";
+  }
+
+  // Confidence calculation
+  let confidence = 60;
+  confidence += bestRoundStat.coverage * 8; // up to +32
+  confidence -= Math.min(20, Math.round(Math.abs(bestRoundStat.trend) * 40));
+  if (fallbackIndex > 0) {
+    confidence -= fallbackIndex * 5;
+  }
+  confidence = Math.max(35, Math.min(98, confidence));
+
+  // Probability at the recommended rank
+  const probability = scoreProbability(recommendedRank, bestRoundStat, fallbackIndex);
 
   return {
-    recommendedRank: Math.round(baselineRank ? baselineRank * 0.98 : 0),
-    round: roundKeyLabel[roundKey],
-    fallbackCategory: cat,
-    competition:
-      chanceLevel(probability) === "High"
-        ? "Low"
-        : chanceLevel(probability) === "Low"
-        ? "High"
-        : "Medium",
+    recommendedRank,
+    round: roundLabel,
+    fallbackCategory,
+    competition,
     confidence,
     probability,
+  };
+};
+
+const pickBestOutcome = (
+  rank: number,
+  targetCategory: string,
+  cutoff: BranchCutoffResponse
+): SeatPrediction => {
+  const chain = computeFallbackChain(targetCategory, cutoff.fall_back);
+  let bestOutcome: {
+    probability: number;
+    round: RoundKey;
+    category: string;
+    stat: RoundStat;
+    fallbackIndex: number;
+  } | null = null;
+
+  for (let i = 0; i < chain.length; i++) {
+    const cat = chain[i];
+    const catData = cutoff.categories?.[cat];
+    if (!catData) continue;
+
+    const stats = computeRoundStats(catData);
+    for (const stat of stats) {
+      if (stat.avg === 0) continue;
+      const prob = scoreProbability(rank, stat, i);
+      if (!bestOutcome || prob > bestOutcome.probability) {
+        bestOutcome = {
+          probability: prob,
+          round: stat.round,
+          category: cat,
+          stat,
+          fallbackIndex: i,
+        };
+      }
+    }
+  }
+
+  if (!bestOutcome) {
+    return {
+      probability: 0,
+      level: "Low",
+      round: "Round 1",
+      effectiveCategory: targetCategory,
+      explanation: "No historical cutoff data available for this category or its fallback chain.",
+      usedCutoff: 0,
+    };
+  }
+
+  const level = chanceLevel(bestOutcome.probability);
+  const roundLabel = roundKeyLabel[bestOutcome.round];
+  
+  let explanation = "";
+  if (bestOutcome.probability >= 0.7) {
+    explanation = `Excellent chances! Your rank of ${rank} is well within the historical average cutoff of ${Math.round(bestOutcome.stat.avg)} for category ${bestOutcome.category} in ${roundLabel}.`;
+  } else if (bestOutcome.probability >= 0.4) {
+    explanation = `Moderate chances. Your rank of ${rank} is close to the average cutoff of ${Math.round(bestOutcome.stat.avg)} for category ${bestOutcome.category} in ${roundLabel}. It's worth putting in your option entry list.`;
+  } else {
+    explanation = `Low chances. The historical average cutoff for category ${bestOutcome.category} in ${roundLabel} is ${Math.round(bestOutcome.stat.avg)}, which is lower than your rank of ${rank}. Keep a safe backup option.`;
+  }
+
+  if (bestOutcome.category !== targetCategory) {
+    explanation += ` (Using fallback category: ${bestOutcome.category})`;
+  }
+
+  return {
+    probability: bestOutcome.probability,
+    level,
+    round: roundLabel,
+    effectiveCategory: bestOutcome.category,
+    explanation,
+    usedCutoff: bestOutcome.stat.avg,
   };
 };
 
@@ -257,16 +324,9 @@ const BranchDetailPage = () => {
   const { user } = useAuth();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [cutoff, setCutoff] = useState<BranchCutoffResponse | null>(null);
+  const [reviews, setReviews] = useState<BranchReviewResponse | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [reviews, setReviews] = useState<{
-    reviews: Review[];
-    average_ratings: Record<string, number>;
-    total_reviews: number;
-  } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [requestingMeeting, setRequestingMeeting] = useState<string | null>(
-    null
-  );
   const [userRankInput, setUserRankInput] = useState<string>("");
   const [userCategoryInput, setUserCategoryInput] = useState<string>("");
   const [prediction, setPrediction] = useState<SeatPrediction | null>(null);
@@ -515,21 +575,7 @@ Highlight competition trend, volatility, safest round, and a forward-looking tip
     primaryCategory,
   ]);
 
-  const requestMeeting = async (studyingUserId?: string) => {
-    if (!studyingUserId) {
-      alert("Unable to request meeting for this reviewer.");
-      return;
-    }
-    setRequestingMeeting(studyingUserId);
-    try {
-      await meetingService.request(studyingUserId);
-      alert("Meeting request sent. Track it on the Meetings page.");
-    } catch (err: any) {
-      alert(err.response?.data?.error || "Error sending meeting request");
-    } finally {
-      setRequestingMeeting(null);
-    }
-  };
+
 
   if (loading)
     return (
@@ -746,6 +792,36 @@ border border-teal-200 dark:border-slate-700 text-white shadow-lg"
                 </div>
               </div>
             </div>
+            {/* AI Summary and Insights */}
+            {(llmBusy || decisionSummary || insightBullets.length > 0 || llmError) && (
+              <div className="mt-6 pt-6 border-t border-white/20">
+                <h3 className="text-md font-semibold text-white mb-3 flex items-center gap-2">
+                  <span>🤖</span> AI Advisory Insights
+                </h3>
+                {llmBusy ? (
+                  <div className="text-white/80 text-sm animate-pulse">Generating AI insights...</div>
+                ) : llmError ? (
+                  <div className="text-rose-200 text-xs bg-rose-950/40 p-3 rounded-lg border border-rose-800/30">
+                    Note: {llmError}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {decisionSummary && (
+                      <p className="text-white/90 text-sm leading-relaxed italic bg-white/5 p-3 rounded-lg border border-white/10">
+                        "{decisionSummary}"
+                      </p>
+                    )}
+                    {insightBullets.length > 0 && (
+                      <ul className="list-disc pl-5 space-y-1.5 text-white/80 text-sm">
+                        {insightBullets.map((bullet, idx) => (
+                          <li key={idx}>{bullet}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -926,12 +1002,8 @@ border border-teal-200 dark:border-slate-700 text-white font-semibold py-2.5 sha
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
               <thead className="bg-slate-50 dark:bg-slate-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-48">
-                    Reviewer
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase">
-                    Preferred Day
-                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-48">Reviewer</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase">Preferred Day</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase">
                     Preferred Time
                   </th>
@@ -943,23 +1015,30 @@ border border-teal-200 dark:border-slate-700 text-white font-semibold py-2.5 sha
                       {f.label}
                     </th>
                   ))}
-                  <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase">
-                    Meeting
-                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {reviews.reviews.map((r) => (
-                  <tr
-                    key={r.review_id}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-700"
-                  >
-                    <td className="px-6 py-4 align-top font-medium text-sm text-slate-900 dark:text-gray-100">
-                      {r.student_user_id_data?.name ||
-                        r.student_user_id_data?.email_id ||
-                        r.student_user_id}
-                    </td>
+                {reviews.reviews.map((r) => {
+
+
+                  const reviewerLabel =
+                    (r as any).student_user_id_data?.name ||
+                    (r as any).student_user_id_data?.email_id ||
+                    ((r as any).student_user_id &&
+                      typeof (r as any).student_user_id === 'object'
+                      ? (r as any).student_user_id.name || (r as any).student_user_id.email_id || (r as any).student_user_id.student_user_id
+                      : (typeof (r as any).student_user_id === 'string' ? (r as any).student_user_id : undefined)) ||
+                    'Unknown';
+
+                  return (
+                    <tr
+                      key={(r as any).review_id || (r as any)._id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      <td className="px-6 py-4 align-top font-medium text-sm text-slate-900 dark:text-gray-100">
+                        {reviewerLabel}
+                      </td>
 
                     <td className="px-6 py-4 align-top text-sm text-slate-800 dark:text-gray-200">
                       {r.preferred_day?.trim() || "—"}
@@ -978,34 +1057,9 @@ border border-teal-200 dark:border-slate-700 text-white font-semibold py-2.5 sha
                         </div>
                       </td>
                     ))}
-                    <td className="px-6 py-4 align-top text-sm">
-                      {user?.type_of_student === "counselling" ? (
-                        <button
-                          onClick={() =>
-                            requestMeeting(
-                              r.student_user_id_data?.student_user_id
-                            )
-                          }
-                          disabled={
-                            !r.student_user_id_data?.student_user_id ||
-                            requestingMeeting ===
-                              r.student_user_id_data?.student_user_id
-                          }
-                          className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 disabled:text-slate-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
-                        >
-                          {requestingMeeting ===
-                          r.student_user_id_data?.student_user_id
-                            ? "Requesting..."
-                            : "Request Meeting"}
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 dark:text-gray-500 text-xs">
-                          Counselling students only
-                        </span>
-                      )}
-                    </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>

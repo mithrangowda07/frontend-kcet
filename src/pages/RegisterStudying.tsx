@@ -169,6 +169,11 @@ const RegisterStudying = () => {
         setLoading(false)
         return
       }
+      if (!formData.category) {
+        setError('Category is required')
+        setLoading(false)
+        return
+      }
       if (!formData.id_card_image) {
         setError('Student ID card upload is required')
         setLoading(false)
@@ -189,9 +194,7 @@ const RegisterStudying = () => {
         usn: formData.usn.trim(),
         id_card_url,
       }
-      if (formData.category) {
-        payload.category = formData.category
-      }
+      payload.category = formData.category
 
       const response = await authService.registerStudying(payload)
 
@@ -287,7 +290,7 @@ const RegisterStudying = () => {
                   htmlFor="email_id"
                   className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2"
                 >
-                  Email Address *
+                  College Email *
                 </label>
                 <input
                   type="email"
@@ -299,7 +302,7 @@ const RegisterStudying = () => {
                   className="w-full px-4 py-2 border border-slate-300 dark:border-gray-600 rounded-lg
                              bg-white dark:bg-gray-700 text-slate-900 dark:text-white
                              focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent"
-                  placeholder="Enter your email"
+                  placeholder="Enter your college email"
                 />
               </div>
             </div>
@@ -433,18 +436,19 @@ const RegisterStudying = () => {
                   htmlFor="category"
                   className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2"
                 >
-                  Category
+                  Category *
                 </label>
                 <select
                   id="category"
                   name="category"
                   value={formData.category}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-4 py-2 border border-slate-300 dark:border-gray-600 rounded-lg
                              bg-white dark:bg-gray-700 text-slate-900 dark:text-white
                              focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent"
                 >
-                  <option value="">Select category (optional)</option>
+                  <option value="">Select category</option>
                   {categories.map((cat) => (
                     <option key={cat.category} value={cat.category}>
                       {cat.category}

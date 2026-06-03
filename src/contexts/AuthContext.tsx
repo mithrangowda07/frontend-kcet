@@ -102,15 +102,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setAndPersistTokens(t)
 
-    let loggedInUser: Student
-
-    if (response.student) {
-      loggedInUser = response.student
-      setAndPersistUser(loggedInUser)
-    } else {
-      loggedInUser = await authService.me()
-      setAndPersistUser(loggedInUser)
-    }
+    const loggedInUser = await authService.me()
+    setAndPersistUser(loggedInUser)
 
     return loggedInUser
   }

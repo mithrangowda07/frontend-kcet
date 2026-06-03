@@ -25,6 +25,7 @@ import AdminDashboardHome from './pages/admin/AdminDashboardHome'
 import BranchInsightPage from './pages/admin/BranchInsightPage'
 import CollegeStudentApproval from './pages/admin/CollegeStudentApproval'
 import CollegeStudentDetail from './pages/admin/CollegeStudentDetail'
+import AdminMeetingDashboard from './pages/admin/AdminMeetingDashboard'
 
 
 function AppShell() {
@@ -107,6 +108,7 @@ function AppShell() {
               <Route path="analytics/branch-insights" element={<BranchInsightPage />} />
               <Route path="students/approvals" element={<CollegeStudentApproval />} />
               <Route path="students/approvals/:studentId" element={<CollegeStudentDetail />} />
+              <Route path="meetings" element={<AdminMeetingDashboard />} />
             </Route>
             <Route path="/admin/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

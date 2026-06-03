@@ -51,6 +51,15 @@ export default function AdminLayout() {
               College Student Approval
             </NavLink>
           </div>
+
+          <div className="pt-3">
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Meetings Management
+            </p>
+            <NavLink to="/admin/meetings" className={subLinkClass}>
+              Meetings
+            </NavLink>
+          </div>
         </nav>
 
         <div className="space-y-2 border-t border-slate-200 p-4 dark:border-slate-700">

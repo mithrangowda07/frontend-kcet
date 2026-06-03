@@ -1,66 +1,86 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { reviewService, meetingService, branchService } from "../services/api";
+import { reviewService } from "../services/api";
 import StarRating from "../components/StarRating";
-import type { Meeting, Review } from "../types";
+import type { Review } from "../types";
+import MeetingRequestForm from "../components/MeetingRequestForm";
+
+const ratingFields = [
+  { key: "teaching", label: "Teaching Quality" },
+  { key: "courses", label: "Course Curriculum" },
+  { key: "library", label: "Library Facilities" },
+  { key: "research", label: "Research Opportunities" },
+  { key: "internship", label: "Internship Support" },
+  { key: "infrastructure", label: "Infrastructure" },
+  { key: "administration", label: "Administration" },
+  { key: "extracurricular", label: "Extracurricular Activities" },
+  { key: "safety", label: "Safety & Security" },
+  { key: "placement", label: "Placement Support" },
+] as const;
+
+const reviewFormInitial = {
+  unique_key: "",
+  teaching_rating: 5,
+  teaching_review: "",
+  courses_rating: 5,
+  courses_review: "",
+  library_rating: 5,
+  library_review: "",
+  research_rating: 5,
+  research_review: "",
+  internship_rating: 5,
+  internship_review: "",
+  infrastructure_rating: 5,
+  infrastructure_review: "",
+  administration_rating: 5,
+  administration_review: "",
+  extracurricular_rating: 5,
+  extracurricular_review: "",
+  safety_rating: 5,
+  safety_review: "",
+  placement_rating: 5,
+  placement_review: "",
+  preferred_day: "",
+  preferred_time: "",
+  start_time: undefined as number | undefined,
+  end_time: undefined as number | undefined,
+};
+
+const daysOfWeek = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 const StudyingDashboard = () => {
   const { user, loading: authLoading } = useAuth();
 
-  const [invitations, setInvitations] = useState<Meeting[]>([]);
+  const resolveUniqueKey = () => {
+    if (!user?.unique_key) return "";
+    if (typeof user.unique_key === "string") return user.unique_key;
+    return user.unique_key.unique_key || user.unique_key._id || "";
+  };
+
+  const resolvedUniqueKey = resolveUniqueKey();
+
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [branchName, setBranchName] = useState("");
   const [collegeName, setCollegeName] = useState("");
   const [existingReview, setExistingReview] = useState<Review | null>(null);
   const [submittingReview, setSubmittingReview] = useState(false);
-  
-  // AI Detection state: only used during submission
-  const [validationSummary, setValidationSummary] = useState<Record<string, 'HUMAN-WRITTEN' | 'AI-GENERATED'> | null>(null);
-  const [showValidationSummary, setShowValidationSummary] = useState(false);
-
-  const daysOfWeek = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-  ];
-
-  // remember the last submitted review so we can edit it
-  const reviewFormInit = {
-    unique_key: user?.unique_key || "",
-    teaching_rating: 5,
-    teaching_review: "",
-    courses_rating: 5,
-    courses_review: "",
-    library_rating: 5,
-    library_review: "",
-    research_rating: 5,
-    research_review: "",
-    internship_rating: 5,
-    internship_review: "",
-    infrastructure_rating: 5,
-    infrastructure_review: "",
-    administration_rating: 5,
-    administration_review: "",
-    extracurricular_rating: 5,
-    extracurricular_review: "",
-    safety_rating: 5,
-    safety_review: "",
-    placement_rating: 5,
-    placement_review: "",
-    preferred_day: "",
-    preferred_time: "",
-  };
-  const [reviewFormData, setReviewFormData] = useState(reviewFormInit);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reviewFormData, setReviewFormData] = useState(reviewFormInitial);
 
   const selectedDays = reviewFormData.preferred_day
     ? reviewFormData.preferred_day.split(", ").map((d) => d.trim())
     : [];
 
-  const formatTime = (hour) => {
+  const formatTime = (hour: number) => {
     const period = hour >= 12 ? "PM" : "AM";
     const h = hour % 12 === 0 ? 12 : hour % 12;
     return `${h}${period}`;
@@ -69,197 +89,141 @@ const StudyingDashboard = () => {
   const START_HOURS = Array.from({ length: 22 }, (_, i) => i); // 12AM(0) → 9PM(21)
 
   useEffect(() => {
-    // load branch display name
-    const loadBranch = async () => {
+    // Only load data if user is authenticated and not loading
+    const loadData = async () => {
       try {
-        if (user?.unique_key_data) {
-          setBranchName(user.unique_key_data.branch_name || "");
-          setCollegeName(user.unique_key_data.college.college_name || "");
+        setIsLoading(true);
+        setLoadError(null);
+
+        // load branch display name
+        const branchData = user?.unique_key_data ||
+          (user?.unique_key && typeof user.unique_key !== 'string' ? user.unique_key : null);
+
+        if (branchData) {
+          setBranchName(branchData.branch_name || "");
+          setCollegeName(branchData.college?.college_name || "");
+        } else if (user?.unique_key) {
+          setBranchName("N/A");
+          setCollegeName("N/A");
         } else {
           setBranchName("");
           setCollegeName("");
         }
-      } catch (err) {
-        console.error("Error loading branch:", err);
-        setBranchName("");
-        setCollegeName("");
-      }
-    };
 
-    // load meeting requests
-    const loadInvitations = async () => {
-      try {
-        const data = await meetingService.myInvitations();
-        if (Array.isArray(data)) {
-          setInvitations(data.filter((m) => m.status === "requested"));
-        } else {
-          setInvitations([]);
-        }
-      } catch (err) {
-        console.error("Error loading invitations:", err);
-        setInvitations([]);
-      }
-    };
 
-    // load existing review
-    const loadExistingReview = async () => {
-      try {
-        if (user?.unique_key) {
-          const review = await reviewService.myReview(user.unique_key);
-          if (review && review.review_id) {
-            // Only set as existing review if it has a review_id
-            setExistingReview(review);
-            // Pre-fill form with existing review data
-            setReviewFormData({
-              unique_key: user.unique_key,
-              teaching_rating: review.teaching_rating || 5,
-              teaching_review: review.teaching_review || "",
-              courses_rating: review.courses_rating || 5,
-              courses_review: review.courses_review || "",
-              library_rating: review.library_rating || 5,
-              library_review: review.library_review || "",
-              research_rating: review.research_rating || 5,
-              research_review: review.research_review || "",
-              internship_rating: review.internship_rating || 5,
-              internship_review: review.internship_review || "",
-              infrastructure_rating: review.infrastructure_rating || 5,
-              infrastructure_review: review.infrastructure_review || "",
-              administration_rating: review.administration_rating || 5,
-              administration_review: review.administration_review || "",
-              extracurricular_rating: review.extracurricular_rating || 5,
-              extracurricular_review: review.extracurricular_review || "",
-              safety_rating: review.safety_rating || 5,
-              safety_review: review.safety_review || "",
-              placement_rating: review.placement_rating || 5,
-              placement_review: review.placement_review || "",
-              preferred_day: review.preferred_day || "",
-              preferred_time: review.preferred_time || "",
-            });
+
+        // load existing review
+        try {
+          if (resolvedUniqueKey) {
+            const review = await reviewService.myReview(resolvedUniqueKey);
+            if (review && review.review_id) {
+              setExistingReview(review);
+              setReviewFormData({
+                unique_key: resolvedUniqueKey,
+                teaching_rating: review.teaching_rating || 5,
+                teaching_review: review.teaching_review || "",
+                courses_rating: review.courses_rating || 5,
+                courses_review: review.courses_review || "",
+                library_rating: review.library_rating || 5,
+                library_review: review.library_review || "",
+                research_rating: review.research_rating || 5,
+                research_review: review.research_review || "",
+                internship_rating: review.internship_rating || 5,
+                internship_review: review.internship_review || "",
+                infrastructure_rating: review.infrastructure_rating || 5,
+                infrastructure_review: review.infrastructure_review || "",
+                administration_rating: review.administration_rating || 5,
+                administration_review: review.administration_review || "",
+                extracurricular_rating: review.extracurricular_rating || 5,
+                extracurricular_review: review.extracurricular_review || "",
+                safety_rating: review.safety_rating || 5,
+                safety_review: review.safety_review || "",
+                placement_rating: review.placement_rating || 5,
+                placement_review: review.placement_review || "",
+                preferred_day: review.preferred_day || "",
+                preferred_time: review.preferred_time || "",
+                start_time: undefined,
+                end_time: undefined,
+              });
+            } else {
+              setExistingReview(null);
+              setReviewFormData({ ...reviewFormInitial, unique_key: resolvedUniqueKey });
+            }
           } else {
             setExistingReview(null);
-            setReviewFormData(reviewFormInit);
           }
-        } else {
+        } catch (err) {
+          console.error("Error loading existing review:", err);
           setExistingReview(null);
         }
       } catch (err) {
-        console.error("Error loading existing review:", err);
-        setExistingReview(null);
+        console.error("Error loading dashboard data:", err);
+        setLoadError("Failed to load dashboard data. Please refresh the page.");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    // Only load data if user is authenticated and not loading
-    // Also check if we have tokens in localStorage
-    const hasTokens = typeof window !== 'undefined' && localStorage.getItem('tokens');
-    if (!authLoading && user && hasTokens) {
-      loadBranch();
-      loadInvitations();
-      loadExistingReview();
+    if (!authLoading && user) {
+      loadData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.unique_key_data, authLoading, user]);
+  }, [user, authLoading]);
 
+
+  const isFormValid = ratingFields.every(field => {
+    const text = (reviewFormData[`${field.key}_review` as keyof typeof reviewFormData] as string) || '';
+    return text.trim().length >= 75 && text.trim().length <= 1000;
+  });
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submittingReview) return; // Prevent multiple submissions
-    if (!user?.unique_key_data) {
+    if (!resolvedUniqueKey || !user?.unique_key_data) {
       alert(
         "Please set your branch in your profile before submitting a review."
       );
       return;
     }
 
-    // CRITICAL: Validate all fields before submission (only on submit)
-    setSubmittingReview(true);
-    setShowValidationSummary(false);
-    setValidationSummary(null);
-    
-    try {
-      // Build reviews object with all text fields
-      const reviews: Record<string, string> = {};
-      ratingFields.forEach(field => {
-        const fieldName = `${field.key}_review`;
-        reviews[fieldName] = (reviewFormData[fieldName as keyof typeof reviewFormData] as string) || '';
-      });
-      
-      const result = await reviewService.validateAll(reviews);
-      
-      // Store summary for display
-      setValidationSummary(result.results);
-      setShowValidationSummary(true);
-      
-      if (!result.can_submit) {
-        // Build error message from validation summary
-        const aiFields = Object.entries(result.results)
-          .filter(([_, label]) => label === 'AI-GENERATED')
-          .map(([fieldName, _]) => {
-            const fieldKey = fieldName.replace('_review', '');
-            const field = ratingFields.find(f => f.key === fieldKey);
-            return field ? field.label : fieldName;
-          });
-        
-        const humanFields = Object.entries(result.results)
-          .filter(([fieldName, label]) => {
-            const text = reviewFormData[fieldName as keyof typeof reviewFormData] as string;
-            return label === 'HUMAN-WRITTEN' && text && text.trim();
-          })
-          .map(([fieldName, _]) => {
-            const fieldKey = fieldName.replace('_review', '');
-            const field = ratingFields.find(f => f.key === fieldKey);
-            return field ? field.label : fieldName;
-          });
-        
-        // Show detailed summary
-        let message = `Review Validation Results:\n\n`;
-        if (humanFields.length > 0) {
-          message += `✅ HUMAN-WRITTEN:\n${humanFields.join(', ')}\n\n`;
-        }
-        if (aiFields.length > 0) {
-          message += `❌ AI-GENERATED:\n${aiFields.join(', ')}\n\n`;
-        }
-        message += `Submission blocked. Please rewrite the AI-generated fields in your own words.`;
-        
-        alert(message);
-        setSubmittingReview(false);
+    // Double check constraints on submit
+    for (const field of ratingFields) {
+      const fieldName = `${field.key}_review`;
+      const val = (reviewFormData[fieldName as keyof typeof reviewFormData] as string || '').trim();
+      if (val.length < 75) {
+        alert(`Review for ${field.label} must contain at least 75 characters.`);
         return;
       }
+      if (val.length > 1000) {
+        alert(`Review for ${field.label} cannot exceed 1000 characters.`);
+        return;
+      }
+    }
 
-      // All validations passed, proceed with submission
-      await reviewService.create(reviewFormData);
+    setSubmittingReview(true);
+    
+    try {
+      // Proceed with submission, always sending the authenticated branch ID.
+      await reviewService.create({ ...reviewFormData, unique_key: resolvedUniqueKey });
       alert(
         existingReview
           ? "Review updated successfully!"
           : "Review submitted successfully!"
       );
       // Reload existing review
-      if (user?.unique_key) {
-        const review = await reviewService.myReview(user.unique_key);
+      if (resolvedUniqueKey) {
+        const review = await reviewService.myReview(resolvedUniqueKey);
         setExistingReview(review);
       }
-      // Reset validation summary
-      setShowValidationSummary(false);
-      setValidationSummary(null);
       setShowReviewForm(false); // collapse the form after submit
     } catch (err: any) {
-      // Handle backend validation errors
-      if (err.response?.data?.error && err.response.data.error.includes('AI-generated')) {
-        const aiFields = err.response.data.field_display_names || [];
-        alert(
-          `Review submission rejected!\n\n` +
-          `The following fields contain AI-generated text:\n${aiFields.join(', ')}\n\n` +
-          `Please rewrite these sections in your own words.`
-        );
-      } else {
-        alert(err.response?.data?.error || err.response?.data?.message || "Error submitting review");
-      }
+      alert(err.response?.data?.error || err.response?.data?.message || "Error submitting review");
     } finally {
       setSubmittingReview(false);
     }
   };
 
   const handleDeleteReview = async () => {
-    if (!user?.unique_key) return;
+    if (!resolvedUniqueKey) return;
 
     if (
       !confirm(
@@ -270,9 +234,9 @@ const StudyingDashboard = () => {
     }
 
     try {
-      await reviewService.delete(user.unique_key);
+      await reviewService.delete(resolvedUniqueKey);
       setExistingReview(null);
-      setReviewFormData(reviewFormInit);
+      setReviewFormData({ ...reviewFormInitial, unique_key: resolvedUniqueKey });
       setShowReviewForm(false);
       alert("Review deleted successfully!");
     } catch (err: any) {
@@ -280,72 +244,71 @@ const StudyingDashboard = () => {
     }
   };
 
-  const handleMeetingStatus = async (meetingId: number, status: string) => {
-    try {
-      await meetingService.updateStatus(meetingId, status);
-      const data = await meetingService.myInvitations();
-      setInvitations(data.filter((m) => m.status === "requested"));
-    } catch (err: any) {
-      alert(err.response?.data?.error || "Error updating meeting status");
-    }
-  };
-
-  const ratingFields = [
-    { key: "teaching", label: "Teaching Quality" },
-    { key: "courses", label: "Course Curriculum" },
-    { key: "library", label: "Library Facilities" },
-    { key: "research", label: "Research Opportunities" },
-    { key: "internship", label: "Internship Support" },
-    { key: "infrastructure", label: "Infrastructure" },
-    { key: "administration", label: "Administration" },
-    { key: "extracurricular", label: "Extracurricular Activities" },
-    { key: "safety", label: "Safety & Security" },
-    { key: "placement", label: "Placement Support" },
-  ] as const;
 
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800 dark:text-gray-100">
-          Studying Dashboard
-        </h1>
-        <p className="mt-2 text-slate-600 dark:text-gray-400">
-          <span className="font-bold">Welcome,</span> {user?.name || "User"}
-        </p>
-        {user?.unique_key && (
-          <>
-            <p className="text-sm text-slate-500 dark:text-gray-400">
-              <span className="font-bold">College Name :</span>{" "}
-              {collegeName || "Loading..."}
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-slate-600 dark:text-gray-400">Loading your dashboard...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {loadError && (
+        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
+          <p className="font-semibold">Error</p>
+          <p>{loadError}</p>
+        </div>
+      )}
+
+      {/* Content - only show when not loading */}
+      {!isLoading && (
+        <>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 dark:text-gray-100">
+              Studying Dashboard
+            </h1>
+            <p className="mt-2 text-slate-600 dark:text-gray-400">
+              <span className="font-bold">Welcome,</span> {user?.name || "User"}
             </p>
+            {user?.unique_key && (
+              <>
+                <p className="text-sm text-slate-500 dark:text-gray-400">
+                  <span className="font-bold">College Name :</span>{" "}
+                  {collegeName || (user?.unique_key ? "N/A" : "Loading...")}
+                </p>
 
-            <p className="text-sm text-slate-500 dark:text-gray-400">
-              <span className="font-bold">Branch Name :</span>{" "}
-              {branchName || "Loading..."}
-            </p>
+                <p className="text-sm text-slate-500 dark:text-gray-400">
+                  <span className="font-bold">Branch Name :</span>{" "}
+                  {branchName || (user?.unique_key ? "N/A" : "Loading...")}
+                </p>
 
-            <p className="text-sm text-slate-500 dark:text-gray-400">
-              <span className="font-bold">Year of Admission :</span>{" "}
-              {user.year_of_starting}
-            </p>
-          </>
-        )}
-      </div>
+                <p className="text-sm text-slate-500 dark:text-gray-400">
+                  <span className="font-bold">Year of Admission :</span>{" "}
+                  {user.year_of_starting}
+                </p>
+              </>
+            )}
+          </div>
 
-      {/* FIRST: Write / Edit Review */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border border-slate-300 dark:border-slate-700">
-          <h2 className="text-xl font-semibold mb-2 text-slate-800 dark:text-gray-100">
-            {existingReview ? "Edit Your Review" : "Write a Review"}
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-gray-400 mb-4">
-            {existingReview
-              ? "Update your review about courses, teaching, placements, and more."
-              : "Share your experience about courses, teaching, placements, and more."}
-          </p>
+          {/* FIRST: Write / Edit Review */}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border border-slate-300 dark:border-slate-700">
+              <h2 className="text-xl font-semibold mb-2 text-slate-800 dark:text-gray-100">
+                {existingReview ? "Edit Your Review" : "Write a Review"}
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-gray-400 mb-4">
+                {existingReview
+                  ? "Update your review about courses, teaching, placements, and more."
+                  : "Share your experience about courses, teaching, placements, and more."}
+              </p>
 
-          <div className="flex gap-2">
+              <div className="flex gap-2">
             <button
               onClick={() => {
                 setShowReviewForm((v) => !v);
@@ -369,48 +332,8 @@ const StudyingDashboard = () => {
           </div>
         </div>
 
-        {/* Meeting Requests stays second */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border border-slate-300 dark:border-slate-700">
-          <h2 className="text-xl font-semibold mb-4 text-slate-800 dark:text-gray-100">
-            Meeting Requests ({invitations.length})
-          </h2>
-          {invitations.length === 0 ? (
-            <p className="text-slate-500 dark:text-gray-400">
-              No pending requests
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {invitations.map((meeting) => (
-                <div
-                  key={meeting.meeting_id}
-                  className="p-3 bg-slate-50 dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600"
-                >
-                  <p className="text-sm text-slate-800 dark:text-gray-200">
-                    Request from: {meeting.counselling_user_id_data?.name || meeting.counselling_user_id_data?.email_id || meeting.counselling_user_id}
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() =>
-                        handleMeetingStatus(meeting.meeting_id, "accepted")
-                      }
-                      className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleMeetingStatus(meeting.meeting_id, "rejected")
-                      }
-                      className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Meeting Request Form */}
+        <MeetingRequestForm />
       </div>
 
       {/* The review form (opens for Write or Edit) */}
@@ -457,6 +380,21 @@ const StudyingDashboard = () => {
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-500"
                     rows={2}
                   />
+                  <div className="mt-1 flex justify-between text-xs">
+                    <span className="text-slate-500 dark:text-gray-400">
+                      {((reviewFormData[`${field.key}_review` as keyof typeof reviewFormData] as string) || '').length} / 1000 characters
+                    </span>
+                    {(() => {
+                      const text = ((reviewFormData[`${field.key}_review` as keyof typeof reviewFormData] as string) || '').trim();
+                      if (text.length > 0 && text.length < 75) {
+                        return <span className="text-red-600 dark:text-red-400 font-semibold">Review must contain at least 75 characters.</span>;
+                      }
+                      if (text.length > 1000) {
+                        return <span className="text-red-600 dark:text-red-400 font-semibold">Review cannot exceed 1000 characters.</span>;
+                      }
+                      return null;
+                    })()}
+                  </div>
                 </div>
               </div>
             ))}
@@ -508,20 +446,28 @@ const StudyingDashboard = () => {
                 <div className="flex gap-3">
                   {/* Start Time */}
                   <select
-                    value={reviewFormData.start_time || ""}
+                    value={reviewFormData.start_time !== undefined ? reviewFormData.start_time : ""}
                     onChange={(e) => {
-                      const start = Number(e.target.value);
-                      const end = start + 2;
-
-                      setReviewFormData((prev) => ({
-                        ...prev,
-                        start_time: start,
-                        end_time: end <= 23 ? end : "",
-                        preferred_time:
-                          end <= 23
-                            ? `${formatTime(start)} - ${formatTime(end)}`
-                            : "",
-                      }));
+                      const start = e.target.value ? Number(e.target.value) : undefined;
+                      if (start === undefined) {
+                        setReviewFormData((prev) => ({
+                          ...prev,
+                          start_time: undefined,
+                          end_time: undefined,
+                          preferred_time: "",
+                        }));
+                      } else {
+                        const end = start + 2;
+                        setReviewFormData((prev) => ({
+                          ...prev,
+                          start_time: start,
+                          end_time: end <= 23 ? end : undefined,
+                          preferred_time:
+                            end <= 23
+                              ? `${formatTime(start)} - ${formatTime(end)}`
+                              : "",
+                        }));
+                      }
                     }}
                     className="w-1/2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
                   >
@@ -535,33 +481,37 @@ const StudyingDashboard = () => {
 
                   {/* End Time */}
                   <select
-                    value={reviewFormData.end_time || ""}
+                    value={reviewFormData.end_time !== undefined ? reviewFormData.end_time : ""}
                     onChange={(e) => {
-                      const end = Number(e.target.value);
-
-                      setReviewFormData((prev) => ({
-                        ...prev,
-                        end_time: end,
-                        preferred_time: `${formatTime(
-                          prev.start_time
-                        )} - ${formatTime(end)}`,
-                      }));
+                      const end = e.target.value ? Number(e.target.value) : undefined;
+                      if (reviewFormData.start_time !== undefined && end !== undefined) {
+                        setReviewFormData((prev) => ({
+                          ...prev,
+                          end_time: end,
+                          preferred_time: `${formatTime(
+                            prev.start_time!
+                          )} - ${formatTime(end)}`,
+                        }));
+                      }
                     }}
                     disabled={!reviewFormData.start_time}
                     className="w-1/2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 disabled:opacity-60"
                   >
                     <option value="">End Time</option>
-                    {reviewFormData.start_time !== undefined &&
-                      Array.from(
-                        { length: 23 - (reviewFormData.start_time + 1) },
-                        (_, i) => reviewFormData.start_time + 2 + i
-                      )
-                        .filter((h) => h <= 23)
-                        .map((hour) => (
-                          <option key={hour} value={hour}>
-                            {formatTime(hour)}
-                          </option>
-                        ))}
+                    {reviewFormData.start_time !== undefined && (
+                      <>
+                        {Array.from(
+                          { length: 23 - (reviewFormData.start_time + 1) },
+                          (_, i) => reviewFormData.start_time! + 2 + i
+                        )
+                          .filter((h) => h <= 23)
+                          .map((hour) => (
+                            <option key={hour} value={hour}>
+                              {formatTime(hour)}
+                            </option>
+                          ))}
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -574,52 +524,14 @@ const StudyingDashboard = () => {
               </div>
             </div>
 
-            {/* Validation Summary - shown after submit attempt */}
-            {showValidationSummary && validationSummary && (
-              <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-700 rounded-lg border border-slate-300 dark:border-slate-600">
-                <h3 className="text-sm font-semibold mb-3 text-slate-800 dark:text-gray-200">
-                  Review Validation Results
-                </h3>
-                <div className="space-y-2 text-sm">
-                  {ratingFields.map(field => {
-                    const fieldName = `${field.key}_review`;
-                    const text = reviewFormData[fieldName as keyof typeof reviewFormData] as string;
-                    const label = validationSummary[fieldName];
-                    
-                    if (!text || !text.trim()) return null;
-                    
-                    return (
-                      <div key={field.key} className="flex items-center justify-between py-1">
-                        <span className="text-slate-700 dark:text-gray-300">{field.label}:</span>
-                        <span className={
-                          label === 'HUMAN-WRITTEN' 
-                            ? "text-green-600 dark:text-green-400 font-medium" 
-                            : label === 'AI-GENERATED'
-                            ? "text-red-600 dark:text-red-400 font-medium"
-                            : "text-slate-500 dark:text-gray-400"
-                        }>
-                          {label === 'HUMAN-WRITTEN' ? '✅ HUMAN-WRITTEN' : label === 'AI-GENERATED' ? '❌ AI-GENERATED' : '⏳ Unchecked'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {Object.values(validationSummary).some(label => label === 'AI-GENERATED') && (
-                  <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-800 dark:text-red-200">
-                    ⚠️ <strong>Submission blocked:</strong> Some fields contain AI-generated content. Please rewrite them in your own words.
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={submittingReview}
+                disabled={submittingReview || !isFormValid}
                 className="bg-blue-600 hover:bg-blue-700 dark:bg-sky-400 dark:hover:bg-sky-500 text-white px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submittingReview
-                  ? "Validating & Saving..."
+                  ? "Saving..."
                   : existingReview
                   ? "Save Changes"
                   : "Submit Review"}
@@ -627,6 +539,8 @@ const StudyingDashboard = () => {
             </div>
           </form>
         </div>
+      )}
+        </>
       )}
     </div>
   );

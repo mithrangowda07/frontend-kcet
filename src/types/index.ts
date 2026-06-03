@@ -7,7 +7,7 @@ export interface Student {
   phone_number: string
   kcet_rank?: number
   college_code?: string
-  unique_key?: string
+  unique_key?: string | Branch
   unique_key_data?: Branch
   year_of_starting?: number
   profile_completed: boolean
@@ -57,6 +57,7 @@ export interface Cluster {
 }
 
 export interface College {
+  college_id?: string
   public_id: string
   college_code: string
   college_name: string
@@ -144,18 +145,45 @@ export interface Review {
   placement_review?: string
 }
 
-export interface Meeting {
-  meeting_id: number
-  counselling_user_id: string
-  studying_user_id: string
-  counselling_user_id_data?: Student
-  studying_user_id_data?: Student
-  scheduled_time?: string
-  duration_minutes: number
-  meet_link?: string
-  status: 'requested' | 'accepted' | 'rejected' | 'completed' | 'cancelled'
-  created_at?: string
-  updated_at?: string
+export interface MeetingRequest {
+  _id?: string
+  meeting_id?: string // For backward compatibility if needed
+  hostUserId?: string | Student | any
+  createdByRole: 'STUDENT' | 'ADMIN'
+  collegeName: string
+  branchName: string
+  currentYear: string
+  admissionType: 'KCET' | 'COMEDK' | 'Management'
+  kcetRank: number
+  languages: string[]
+  startTime: string
+  endTime: string
+  registrationDeadline: string
+  meetingCapacity: number
+  registeredCount: number
+  tags: string[]
+  verificationBadge: string
+  question1: string
+  question2: string
+  question3: string
+  question4: string
+  meetingLink?: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED' | 'CANCELLED'
+  rejectionReason?: string
+  approvedBy?: string
+  approvedAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface Meeting extends MeetingRequest {}
+
+export interface MeetingRegistration {
+  _id?: string
+  meetingId: string | MeetingRequest
+  userId: string | Student
+  status: 'REGISTERED' | 'ATTENDED' | 'MISSED' | 'CANCELLED'
+  registeredAt: string
 }
 
 export interface BranchInsightsResponse {
@@ -170,4 +198,3 @@ export interface BranchInsightsResponse {
   one_line_summary: string
   additional_info: string[]
 }
-

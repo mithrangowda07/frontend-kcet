@@ -14,7 +14,7 @@ import type {
   AdminCollege,
 } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -235,7 +235,12 @@ export const collegeService = {
     try {
       const res = await api.get('/locations/')
       if (res?.data?.locations && Array.isArray(res.data.locations)) return res.data.locations
-      if (Array.isArray(res.data)) return res.data
+      if (Array.isArray(res.data)) {
+        if (res.data.length > 0 && typeof res.data[0] === 'object' && res.data[0] !== null) {
+          return res.data.map((item: any) => item.location_name || item.location).filter(Boolean)
+        }
+        return res.data
+      }
       // unexpected shape -> try search fallback
     } catch (err) {
       // fall through to fallback below
@@ -247,7 +252,7 @@ export const collegeService = {
       const res2 = await api.get('/search/', { params: {} })
       if (res2?.data?.locations && Array.isArray(res2.data.locations)) return res2.data.locations
       if (Array.isArray(res2?.data?.colleges)) {
-        const dedup = Array.from(new Set(res2.data.colleges.map((c: any) => (c.location || '').trim()).filter(Boolean)))
+        const dedup = Array.from(new Set<string>(res2.data.colleges.map((c: any) => (c.location || '').trim()).filter(Boolean)))
         return dedup.sort()
       }
     } catch (err) {
@@ -457,14 +462,14 @@ export const reviewService = {
       const data = response.data
       // Backend returns {'review': None} when no review exists, or the review object directly when it exists
       if (data === null) return null
+      let rev: any = data
       if (typeof data === 'object' && 'review' in data) {
-        return data.review || null
+        rev = data.review
       }
-      // If data has review_id, it's a review object
-      if (data && typeof data === 'object' && 'review_id' in data) {
-        return data as Review
-      }
-      return null
+      if (!rev) return null
+      // Normalize backend _id to frontend `review_id` for consistent handling
+      if (rev._id && !rev.review_id) rev.review_id = rev._id
+      return rev as Review
     } catch (error: any) {
       // If 401 or other auth errors, return null instead of throwing
       if (error.response?.status === 401 || error.response?.status === 403) {
@@ -492,71 +497,62 @@ export const reviewService = {
     const response = await api.get(`/reviews/colleges/${publicId}/`)
     return response.data
   },
-
-  // AI Detection endpoints
-  checkText: async (field: string, text: string): Promise<{
-    field: string
-    label: 'HUMAN-WRITTEN' | 'AI-GENERATED'
-    ai_probability: number
-  }> => {
-    const response = await api.post('/reviews/check-text/', { field, text })
-    // Map response to frontend format (normalize to lowercase for compatibility)
-    const data = response.data
-    return {
-      field: data.field,
-      label: data.label === 'AI-GENERATED' ? 'AI-GENERATED' : 'HUMAN-WRITTEN',
-      ai_probability: data.ai_probability || 0
-    }
-  },
-
-  validateAll: async (reviews: Record<string, string>): Promise<{
-    results: Record<string, 'HUMAN-WRITTEN' | 'AI-GENERATED'>
-    can_submit: boolean
-    ai_fields: string[]
-  }> => {
-    const response = await api.post('/reviews/validate-all/', { reviews })
-    return response.data
-  },
 }
 
 export const meetingService = {
-  request: async (studyingUserId: string, scheduledTime?: string): Promise<Meeting> => {
-    const response = await api.post('/meetings/request/', {
-      studying_user_id: studyingUserId,
-      scheduled_time: scheduledTime,
-    })
+  create: async (data: any): Promise<Meeting> => {
+    const response = await api.post('/meetings/request/', data)
     return response.data
   },
 
-  myRequests: async (): Promise<Meeting[]> => {
-    const response = await api.get('/meetings/my-requests/')
+  getApproved: async (): Promise<Meeting[]> => {
+    const response = await api.get('/meetings/approved/')
     return response.data
   },
 
-  myInvitations: async (): Promise<Meeting[]> => {
-    try {
-      const response = await api.get('/meetings/my-invitations/')
-      return response.data || []
-    } catch (error: any) {
-      // If 401 or other auth errors, return empty array instead of throwing
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error loading invitations:', error)
-        return []
-      }
-      throw error
-    }
-  },
-
-  updateStatus: async (meetingId: number, status: string, scheduledTime?: string): Promise<Meeting> => {
-    const response = await api.patch(`/meetings/${meetingId}/status/`, {
-      status,
-      scheduled_time: scheduledTime,
-    })
+  register: async (meetingId: string): Promise<any> => {
+    const response = await api.post(`/meetings/${meetingId}/register/`)
     return response.data
   },
 
-  branchStudents: async (publicId: string) => {
-    const response = await api.get(`/meetings/branches/${publicId}/students/`)
+  getRegistered: async (): Promise<Meeting[]> => {
+    const response = await api.get('/meetings/registered/')
+    return response.data
+  },
+
+  getHostMeetings: async (): Promise<Meeting[]> => {
+    const response = await api.get('/meetings/host/')
+    return response.data
+  },
+
+  join: async (meetingId: string): Promise<{ meetingLink: string }> => {
+    const response = await api.post(`/meetings/${meetingId}/join/`)
+    return response.data
+  },
+
+  // Admin APIs
+  adminGetPending: async (): Promise<Meeting[]> => {
+    const response = await adminApi.get('/meetings/admin/pending/')
+    return response.data
+  },
+
+  adminApprove: async (meetingId: string, data: { meetingCapacity: number; meetingLink: string }): Promise<Meeting> => {
+    const response = await adminApi.post(`/meetings/admin/${meetingId}/approve/`, data)
+    return response.data
+  },
+
+  adminReject: async (meetingId: string, data: { rejectionReason: string }): Promise<Meeting> => {
+    const response = await adminApi.post(`/meetings/admin/${meetingId}/reject/`, data)
+    return response.data
+  },
+
+  adminCreate: async (data: any): Promise<Meeting> => {
+    const response = await adminApi.post('/meetings/admin/create/', data)
+    return response.data
+  },
+
+  adminGetHistory: async (status: string): Promise<Meeting[]> => {
+    const response = await adminApi.get('/meetings/admin/history/', { params: { status } })
     return response.data
   },
 }
