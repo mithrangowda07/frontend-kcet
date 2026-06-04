@@ -93,8 +93,6 @@ const ROUND_WEIGHTS: Record<RoundKey, number> = {
   r3: 1.05,
 };
 
-const OLLAMA_MODEL = "kcet-advisor";
-
 const normalizeCutoffValue = (value?: number | string | null) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : 0;
