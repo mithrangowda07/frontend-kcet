@@ -331,10 +331,6 @@ const BranchDetailPage = () => {
   const [userCategoryInput, setUserCategoryInput] = useState<string>("");
   const [prediction, setPrediction] = useState<SeatPrediction | null>(null);
   const [predicting, setPredicting] = useState(false);
-  const [decisionSummary, setDecisionSummary] = useState<string>("");
-  const [insightBullets, setInsightBullets] = useState<string[]>([]);
-  const [llmBusy, setLlmBusy] = useState(false);
-  const [llmError, setLlmError] = useState<string | null>(null);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -439,43 +435,21 @@ const BranchDetailPage = () => {
     }
   }, [branch, insightsData, insightsBranchKey]);
 
-  const formatCutoffForLLM = useCallback(() => {
-    if (!cutoff?.categories) return "{}";
-    const payload: Record<string, any> = {};
-    Object.entries(cutoff.categories).forEach(([cat, years]) => {
-      payload[cat] = {};
-      Object.entries(years || {}).forEach(([year, rounds]) => {
-        payload[cat][year] = {
-          R1: normalizeCutoffValue((rounds as any)?.r1),
-          R2: normalizeCutoffValue((rounds as any)?.r2),
-          R3: normalizeCutoffValue((rounds as any)?.r3),
-        };
-      });
-    });
-    return JSON.stringify(payload, null, 2);
-  }, [cutoff]);
-
-  const ollamaGenerate = useCallback(async (prompt: string) => {
-    setLlmError(null);
-    const response = await fetch("http://localhost:11434/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        prompt,
-        stream: false,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        "Ollama service not reachable. Ensure it runs locally on port 11434."
-      );
-    }
-
-    const data = await response.json();
-    return (data?.response as string)?.trim?.() || "";
-  }, []);
+  // const formatCutoffForLLM = useCallback(() => {
+  //   if (!cutoff?.categories) return "{}";
+  //   const payload: Record<string, any> = {};
+  //   Object.entries(cutoff.categories).forEach(([cat, years]) => {
+  //     payload[cat] = {};
+  //     Object.entries(years || {}).forEach(([year, rounds]) => {
+  //       payload[cat][year] = {
+  //         R1: normalizeCutoffValue((rounds as any)?.r1),
+  //         R2: normalizeCutoffValue((rounds as any)?.r2),
+  //         R3: normalizeCutoffValue((rounds as any)?.r3),
+  //       };
+  //     });
+  //   });
+  //   return JSON.stringify(payload, null, 2);
+  // }, [cutoff]);
 
   const handleSeatPrediction = useCallback(() => {
     const rank = Number(userRankInput);
@@ -513,69 +487,6 @@ const BranchDetailPage = () => {
     (props: any) => <CustomTooltip {...props} />,
     []
   );
-
-  useEffect(() => {
-    if (!cutoff || !decisionData || !branch) return;
-    const run = async () => {
-      setLlmBusy(true);
-      try {
-        const decisionPrompt = `
-You are a concise KCET counselling advisor.
-Branch: ${branch.branch_name} at ${branch.college.college_name}
-Primary category: ${primaryCategory}
-Best round: ${decisionData.round}
-Recommended rank threshold: ${decisionData.recommendedRank}
-Probability: ${(decisionData.probability * 100).toFixed(0)}%
-Fallback category: ${decisionData.fallbackCategory}
-
-Cutoff JSON (latest 3 years):
-${formatCutoffForLLM()}
-
-Respond with 2 short sentences that tell the student what to do. Avoid jargon.`;
-
-        const summary = await ollamaGenerate(decisionPrompt);
-        setDecisionSummary(summary);
-
-        const insightPrompt = `
-You are generating crisp insights about KCET cutoff behavior.
-Use last 3 years data, trends, and fallback category logic.
-Return 4-5 bullet points (no numbering), each under 18 words.
-
-Cutoffs:
-${formatCutoffForLLM()}
-
-Fallback chain for ${primaryCategory}: ${computeFallbackChain(
-          primaryCategory,
-          cutoff.fall_back
-        ).join(" → ")}
-
-Highlight competition trend, volatility, safest round, and a forward-looking tip for 2025.`;
-
-        const insightText = await ollamaGenerate(insightPrompt);
-        const bullets = insightText
-          .split("\n")
-          .map((line) => line.replace(/^[\s*\-\d\.]+/, "").trim())
-          .filter(Boolean)
-          .slice(0, 5);
-        setInsightBullets(bullets);
-      } catch (err: any) {
-        console.error(err);
-        setLlmError(err?.message || "Unable to generate AI guidance.");
-      } finally {
-        setLlmBusy(false);
-      }
-    };
-    run();
-  }, [
-    branch,
-    cutoff,
-    decisionData,
-    formatCutoffForLLM,
-    ollamaGenerate,
-    primaryCategory,
-  ]);
-
-
 
   if (loading)
     return (
@@ -792,36 +703,6 @@ border border-teal-200 dark:border-slate-700 text-white shadow-lg"
                 </div>
               </div>
             </div>
-            {/* AI Summary and Insights */}
-            {(llmBusy || decisionSummary || insightBullets.length > 0 || llmError) && (
-              <div className="mt-6 pt-6 border-t border-white/20">
-                <h3 className="text-md font-semibold text-white mb-3 flex items-center gap-2">
-                  <span>🤖</span> AI Advisory Insights
-                </h3>
-                {llmBusy ? (
-                  <div className="text-white/80 text-sm animate-pulse">Generating AI insights...</div>
-                ) : llmError ? (
-                  <div className="text-rose-200 text-xs bg-rose-950/40 p-3 rounded-lg border border-rose-800/30">
-                    Note: {llmError}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {decisionSummary && (
-                      <p className="text-white/90 text-sm leading-relaxed italic bg-white/5 p-3 rounded-lg border border-white/10">
-                        "{decisionSummary}"
-                      </p>
-                    )}
-                    {insightBullets.length > 0 && (
-                      <ul className="list-disc pl-5 space-y-1.5 text-white/80 text-sm">
-                        {insightBullets.map((bullet, idx) => (
-                          <li key={idx}>{bullet}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
