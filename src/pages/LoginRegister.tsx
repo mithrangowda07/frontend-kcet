@@ -28,6 +28,16 @@ const LoginRegister = () => {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!isLogin) {
+      if (studentType === "studying") {
+        navigate("/register/studying");
+      } else {
+        navigate("/register/counselling");
+      }
+    }
+  }, [isLogin, studentType, navigate]);
+
   const [formData, setFormData] = useState({
     name: "",
     email_id: "",
@@ -695,24 +705,28 @@ setIsLogin(true);
             <button
               type="button"
               onClick={() => {
-                setIsLogin(!isLogin);
-                setError("");
-                setEmailError("");
-                setBranches([]);
-                setColleges([]);
-                setFormData({
-                  name: "",
-                  email_id: "",
-                  phone_number: "",
-                  password: "",
-                  password_confirm: "",
-                  category: "",
-                  kcet_rank: "",
-                  college_code: "",
-                  unique_key: "",
-                  year_of_starting: "",
-                  usn: "",
-                });
+                if (isLogin) {
+                  navigate("/register/counselling");
+                } else {
+                  setIsLogin(true);
+                  setError("");
+                  setEmailError("");
+                  setBranches([]);
+                  setColleges([]);
+                  setFormData({
+                    name: "",
+                    email_id: "",
+                    phone_number: "",
+                    password: "",
+                    password_confirm: "",
+                    category: "",
+                    kcet_rank: "",
+                    college_code: "",
+                    unique_key: "",
+                    year_of_starting: "",
+                    usn: "",
+                  });
+                }
               }}
               className="text-blue-600 dark:text-sky-400 hover:text-blue-500 dark:hover:text-sky-300"
             >
