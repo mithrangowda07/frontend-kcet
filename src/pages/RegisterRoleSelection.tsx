@@ -42,7 +42,7 @@ const RegisterRoleSelection = () => {
                 </div>
               </div>
               <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mb-3">
-                Counselling Student
+                KCET-Counselling Student
               </h2>
               <p className="text-slate-600 dark:text-gray-300 mb-6">
                 For students seeking college admission guidance based on KCET rank
@@ -96,7 +96,7 @@ const RegisterRoleSelection = () => {
                 </div>
               </div>
               <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mb-3">
-                Studying Student
+                College Student
               </h2>
               <p className="text-slate-600 dark:text-gray-300 mb-6">
                 For students currently enrolled in a college
@@ -108,7 +108,7 @@ const RegisterRoleSelection = () => {
                 </li>
                 <li className="flex items-start">
                   <span className="text-green-500 mr-2">✓</span>
-                  <span>Connect with counselling students</span>
+                  <span>Connect with KCET Aspirant</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-green-500 mr-2">✓</span>

@@ -706,7 +706,7 @@ setIsLogin(true);
               type="button"
               onClick={() => {
                 if (isLogin) {
-                  navigate("/register/counselling");
+                  navigate("/register");
                 } else {
                   setIsLogin(true);
                   setError("");

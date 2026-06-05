@@ -143,7 +143,7 @@ const Navbar = () => {
                   </svg>
                 )}
               </button>
-              {isAuthenticated ? (
+              {isAuthenticated && (
                 <>
                   <span className="text-slate-700 dark:text-gray-300 text-sm font-medium">
                     {user?.name || user?.email_id || 'User'}
@@ -155,13 +155,6 @@ const Navbar = () => {
                     Logout
                   </button>
                 </>
-              ) : (
-                <Link
-                  to="/auth"
-                  className="bg-blue-600 hover:bg-blue-700 dark:bg-sky-400 dark:hover:bg-sky-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Login / Register
-                </Link>
               )}
             </div>
 
@@ -273,21 +266,13 @@ const Navbar = () => {
             )}
 
             {/* Mobile: Logout Button (Full Width) */}
-            {isAuthenticated ? (
+            {isAuthenticated && (
               <button
                 onClick={handleLogout}
                 className="w-full mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-md text-base font-medium transition-colors"
               >
                 Logout
               </button>
-            ) : (
-              <Link
-                to="/auth"
-                className="block mt-2 text-center bg-blue-600 hover:bg-blue-700 dark:bg-sky-400 dark:hover:bg-sky-500 text-white px-4 py-3 rounded-md text-base font-medium transition-colors"
-                onClick={closeMobileMenu}
-              >
-                Login / Register
-              </Link>
             )}
           </div>
         </div>

@@ -68,6 +68,10 @@ const LandingPage = () => {
               based on your KCET rank
             </p>
 
+            <p className="text-sxl mb-4  text-white">
+              Unlock more features by signing in or creating an account
+            </p>  
+
             {!isAuthenticated && (
               <Link
                 to="/register"
