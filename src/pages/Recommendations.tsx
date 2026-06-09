@@ -204,11 +204,14 @@ const Recommendations = () => {
               className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
             >
               <option value="">All</option>
-              {clusters.map(c => (
-                <option key={c.cluster_code} value={c.cluster_code}>
-                  {c.cluster_name}
-                </option>
-              ))}
+              {clusters.map(c => {
+                const code = c.cluster_code || (c as any)._id;
+                return (
+                  <option key={code} value={code}>
+                    {c.cluster_name}
+                  </option>
+                );
+              })}
             </select>
           </Filter>
               

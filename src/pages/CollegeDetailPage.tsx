@@ -117,25 +117,27 @@ const CollegeDetailPage = () => {
                     {branch.cluster.cluster_name}
                   </td>
                   <td className="px-4 py-3">
-                    {user?.type_of_student === "counselling" &&
-                      (choiceKeys.has(branch.public_id) ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                          Added
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => addToChoices(branch.public_id)}
-                          className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 text-sm"
-                        >
-                          Add to Choices
-                        </button>
-                      ))}
-                    <Link
-                      to={`/branches/${branch.public_id}`}
-                      className="ml-4 text-sm text-slate-700 dark:text-gray-300 hover:underline"
-                    >
-                      View Details
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      {user?.type_of_student === "counselling" &&
+                        (choiceKeys.has(branch.public_id) ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 whitespace-nowrap">
+                            Added
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => addToChoices(branch.public_id)}
+                            className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 text-sm whitespace-nowrap"
+                          >
+                            Add to Choices
+                          </button>
+                        ))}
+                      <Link
+                        to={`/branches/${branch.public_id}`}
+                        className="text-sm text-slate-700 dark:text-gray-300 hover:underline whitespace-nowrap"
+                      >
+                        View Details
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
