@@ -98,6 +98,52 @@ const normalizeCutoffValue = (value?: number | string | null) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
+
+const sanitizeRoundData = (r1: number | null, r2: number | null, r3: number | null) => {
+  const isValid = (v: number | null): v is number =>
+    v !== null &&
+    v !== undefined &&
+    v !== 0;
+
+  // R1
+  let graphR1 = isValid(r1) ? r1 : null;
+
+  // R2
+  let graphR2: number | null;
+  if (!isValid(r2)) {
+    graphR2 = graphR1;
+  } else if (graphR1 !== null && r2 < graphR1) {
+    graphR2 = graphR1;
+  } else {
+    graphR2 = r2;
+  }
+
+  // R3
+  let graphR3: number | null;
+  if (!isValid(r3)) {
+    graphR3 = graphR2;
+  } else if (graphR2 !== null && r3 < graphR2) {
+    graphR3 = graphR2;
+  } else if (graphR1 !== null && r3 < graphR1) {
+    graphR3 = graphR1;
+  } else {
+    graphR3 = r3;
+  }
+
+  return {
+    graph: {
+      R1: graphR1,
+      R2: graphR2,
+      R3: graphR3,
+    },
+    tooltip: {
+      R1: isValid(r1) ? r1 : "--",
+      R2: isValid(r2) ? r2 : "--",
+      R3: isValid(r3) ? r3 : "--",
+    },
+  };
+};
+
 const roundKeyLabel: Record<RoundKey, string> = {
   r1: "R1",
   r2: "R2",
@@ -342,14 +388,36 @@ const BranchDetailPage = () => {
   ) => {
     if (!categoryData) return [];
     const years = ["2022", "2023", "2024", "2025"];
+    
     return years
-      .map((y) => ({
-        year: y,
-        R1: Number(categoryData[y]?.r1 ?? 0),
-        R2: Number(categoryData[y]?.r2 ?? 0),
-        R3: Number(categoryData[y]?.r3 ?? 0),
-      }))
-      .filter((row) => row.R1 || row.R2 || row.R3);
+      .map((y) => {
+        const r1 = categoryData[y]?.r1;
+        const r2 = categoryData[y]?.r2;
+        const r3 = categoryData[y]?.r3;
+        
+        const parseVal = (v: any) => {
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        };
+        
+        const numR1 = parseVal(r1);
+        const numR2 = parseVal(r2);
+        const numR3 = parseVal(r3);
+        
+        const sanitized = sanitizeRoundData(numR1, numR2, numR3);
+        
+        return {
+          year: y,
+          R1: sanitized.graph.R1,
+          R2: sanitized.graph.R2,
+          R3: sanitized.graph.R3,
+          tooltipR1: sanitized.tooltip.R1,
+          tooltipR2: sanitized.tooltip.R2,
+          tooltipR3: sanitized.tooltip.R3,
+          hasData: numR1 !== null || numR2 !== null || numR3 !== null
+        };
+      })
+      .filter((row) => row.hasData);
   };
 
   const categories = useMemo(
@@ -503,22 +571,7 @@ const BranchDetailPage = () => {
   let chartCategories: string[] = [];
 
   if (!selectedCategory) {
-    // If user is logged in and has category, use it; otherwise show all
-    if (user?.category) {
-      const chain = computeFallbackChain(user.category, cutoff?.fall_back);
-      const seen = new Set<string>();
-      chartCategories = chain.filter((c) => {
-        if (seen.has(c)) return false;
-        seen.add(c);
-        return cutoff?.categories?.[c];
-      });
-      // If no categories found for user's category, show all
-      if (chartCategories.length === 0) {
-        chartCategories = categories;
-      }
-    } else {
-      chartCategories = categories;
-    }
+    chartCategories = categories;
   } else {
     const chain = computeFallbackChain(selectedCategory, cutoff?.fall_back);
     const seen = new Set<string>();
@@ -645,6 +698,48 @@ const BranchDetailPage = () => {
                     />
                   </LineChart>
                 </ResponsiveContainer>
+
+                <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/80 dark:border-cyan-400/20 bg-white dark:bg-[#071224] shadow-[0_0_20px_rgba(34,211,238,0.08)] dark:shadow-[0_0_20px_rgba(34,211,238,0.05)]">
+                  <table className="w-full text-sm min-w-[280px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-cyan-500/10 bg-slate-50 dark:bg-cyan-500/5">
+                        <th className="px-3 sm:px-4 py-2 text-left font-semibold text-slate-500 dark:text-cyan-200">
+                          Year
+                        </th>
+                        <th className="px-3 sm:px-4 py-2 text-center font-semibold text-emerald-600 dark:text-emerald-300">
+                          R1
+                        </th>
+                        <th className="px-3 sm:px-4 py-2 text-center font-semibold text-blue-600 dark:text-blue-300">
+                          R2
+                        </th>
+                        <th className="px-3 sm:px-4 py-2 text-center font-semibold text-red-600 dark:text-red-300">
+                          R3
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-cyan-500/5 text-slate-800 dark:text-gray-200">
+                      {data.map((row) => (
+                        <tr
+                          key={row.year}
+                          className="hover:bg-slate-50 dark:hover:bg-cyan-400/5 transition-all duration-150"
+                        >
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-medium text-slate-700 dark:text-gray-200">
+                            {row.year}
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-center font-semibold text-emerald-600 dark:text-emerald-400">
+                            {row.tooltipR1}
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-center font-semibold text-blue-600 dark:text-blue-400">
+                            {row.tooltipR2}
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-center font-semibold text-red-600 dark:text-red-400">
+                            {row.tooltipR3}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })}
