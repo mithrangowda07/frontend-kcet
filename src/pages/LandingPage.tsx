@@ -101,17 +101,14 @@ const LandingPage = () => {
             <p className="text-sxl mb-4  text-white" style={{ marginTop: "20px" }}>
               For more details about colleges and to connect with others, join our group! 📚
             </p>  
-
-            {!isAuthenticated && (
-              <Link
-                to="https://chat.whatsapp.com/HGUYPmIO72eAIe1bE8e0dm"
-                className="backdrop-blur-md bg-white/20 text-white px-8 py-3 rounded-xl 
-                           text-lg font-semibold border border-white/30 
-                           hover:bg-white/30 transition"
-              >
-                Join Our Group
-              </Link>
-            )}
+            <Link
+              to="https://chat.whatsapp.com/HGUYPmIO72eAIe1bE8e0dm"
+              className="backdrop-blur-md bg-white/20 text-white px-8 py-3 rounded-xl 
+                          text-lg font-semibold border border-white/30 
+                          hover:bg-white/30 transition"
+            >
+              Join Our Group
+            </Link>
 
             <p className="text-sxl mb-4 text-white" style={{ marginTop: "20px" }}>
               This website is built by{" "}

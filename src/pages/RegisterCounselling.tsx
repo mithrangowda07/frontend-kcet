@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { authService } from '../services/api'
 import { categoryService } from '../services/api'
 import type { Category } from '../types'
+import { useAuth } from '../contexts/AuthContext'
 
 const RegisterCounselling = () => {
   const navigate = useNavigate()
+  const { loginWithTokens } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
@@ -99,23 +101,13 @@ const RegisterCounselling = () => {
 
       const response = await authService.registerCounselling(registerData)
 
-      // Store tokens and user data
-      if (response.tokens) {
-        authService.setTokens(response.tokens)
-        if (response.student) {
-          localStorage.setItem('user', JSON.stringify(response.student))
-        }
-        // Update auth context by fetching user data
-        try {
-          const userData = await authService.me()
-          localStorage.setItem('user', JSON.stringify(userData))
-        } catch (err) {
-          console.error('Error fetching user data:', err)
-        }
+      // Store tokens and user data, then login using context
+      if (response.tokens && response.student) {
+        loginWithTokens(response.tokens, response.student)
       }
 
-      // Redirect to login page (as per requirements)
-      navigate('/auth?login=true', { replace: true })
+      // Redirect to counselling dashboard
+      navigate('/dashboard/counselling', { replace: true })
     } catch (err: any) {
       const errorMessage =
         err.response?.data?.message ||

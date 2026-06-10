@@ -10,6 +10,7 @@ interface AuthContextType {
   logout: () => void
   isAuthenticated: boolean
   loading: boolean
+  loginWithTokens: (tokens: { access: string; refresh: string }, user: Student) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -129,6 +130,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearAuthCompletely()
   }
 
+  const loginWithTokens = (t: { access: string; refresh: string }, u: Student) => {
+    setAndPersistTokens(t)
+    setAndPersistUser(u)
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -139,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         isAuthenticated: !!user && isApprovedStudent(user),
         loading,
+        loginWithTokens,
       }}
     >
       {children}
