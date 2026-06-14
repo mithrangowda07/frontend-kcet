@@ -115,8 +115,9 @@ const CounsellingDashboard = () => {
 
       autoTable(doc, {
         startY: 28,
-        head: [['#', 'College', 'Branch', 'Cluster', 'Cutoff']],
+        head: [['College Code', '#', 'College', 'Branch', 'Cluster', 'Cutoff']],
         body: choices.map((choice, idx) => [
+          choice.unique_key_data?.college.college_code || 'N/A',
           idx + 1,
           choice.unique_key_data?.college.college_name || 'N/A',
           choice.unique_key_data?.branch_name || 'N/A',
@@ -127,8 +128,9 @@ const CounsellingDashboard = () => {
         headStyles: { fillColor: [22, 101, 52] },
         alternateRowStyles: { fillColor: [245, 245, 245] },
         columnStyles: {
-          0: { cellWidth: 12, halign: 'center' },
-          4: { cellWidth: 25, halign: 'center' },
+          0: { cellWidth: 25, halign: 'center' },
+          1: { cellWidth: 12, halign: 'center' },
+          5: { cellWidth: 25, halign: 'center' },
         },
       })
 
@@ -229,6 +231,9 @@ const CounsellingDashboard = () => {
                 <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                   <thead className="bg-slate-50 dark:bg-slate-700 sticky top-0">
                     <tr>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px]">
+                        College Code
+                      </th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-12 sm:w-16">
                         Order
                       </th>
@@ -261,6 +266,9 @@ const CounsellingDashboard = () => {
                           draggedIndex === index ? 'opacity-50' : ''
                         }`}
                       >
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-900 dark:text-gray-100">
+                          {choice.unique_key_data?.college.college_code || 'N/A'}
+                        </td>
                         <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-slate-900 dark:text-gray-100">
                           {index + 1}
                         </td>

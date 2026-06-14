@@ -11,7 +11,7 @@ const Recommendations = () => {
   const [loading, setLoading] = useState(false)
   const [choices, setChoices] = useState<CounsellingChoice[]>([])
 
-  const [category, setCategory] = useState('')
+  const [category, setCategory] = useState('GM')
   const [categories, setCategories] = useState<Category[]>([])
 
   const [clusters, setClusters] = useState<Cluster[]>([])
@@ -66,7 +66,7 @@ const Recommendations = () => {
     loadClusters()
     loadChoices()
 
-    if (user?.category) setCategory(user.category)
+    setCategory('GM')
 
     if (user?.kcet_rank) {
       const rank = user.kcet_rank
@@ -253,6 +253,7 @@ const Recommendations = () => {
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
               <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr>
+                  <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">College Code</th>
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">College</th>
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">Branch</th>
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">{round} Cutoff</th>
@@ -266,6 +267,9 @@ const Recommendations = () => {
                     key={r.public_id}
                     className="hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
                   >
+                    <td className="px-6 py-3 font-semibold text-slate-900 dark:text-gray-100">
+                      {r.college.college_code || 'N/A'}
+                    </td>
                     <td className="px-6 py-3">
                       <Link
                         to={`/colleges/${r.college.public_id}`}
