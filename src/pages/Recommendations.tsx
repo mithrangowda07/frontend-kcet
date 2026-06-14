@@ -11,7 +11,7 @@ const Recommendations = () => {
   const [loading, setLoading] = useState(false)
   const [choices, setChoices] = useState<CounsellingChoice[]>([])
 
-  const [category, setCategory] = useState('GM')
+  const [category, setCategory] = useState(user?.category || 'GM')
   const [categories, setCategories] = useState<Category[]>([])
 
   const [clusters, setClusters] = useState<Cluster[]>([])
@@ -80,7 +80,7 @@ const Recommendations = () => {
     loadClusters()
     loadChoices()
 
-    setCategory('GM')
+    setCategory(user?.category || 'GM')
 
     if (user?.kcet_rank) {
       const rank = user.kcet_rank
@@ -134,6 +134,9 @@ const Recommendations = () => {
         closingRank
       )
       setRecommendations(data.recommendations)
+      if (data.closing_rank && data.closing_rank !== closingRank) {
+        setClosingRank(data.closing_rank)
+      }
     } catch (err: any) {
       alert(err.response?.data?.error || 'Error loading recommendations')
     } finally {
