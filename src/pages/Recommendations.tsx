@@ -22,6 +22,7 @@ const Recommendations = () => {
 
   const [openingRank, setOpeningRank] = useState(0)
   const [closingRank, setClosingRank] = useState(0)
+  const [hasInitialLoaded, setHasInitialLoaded] = useState(false)
 
   /* ---------------- Display Name ---------------- */
   const displayName = useMemo(() => {
@@ -101,7 +102,12 @@ const Recommendations = () => {
   /* ---------------- Fetch Recommendations ---------------- */
   const loadRecommendations = async () => {
     if (!user?.kcet_rank) return alert('Please set your KCET rank first')
-    if (!openingRank || !closingRank) return alert('Set opening and closing ranks')
+    if (openingRank <= 0 || closingRank <= 0) {
+      return alert('Ranks must be positive numbers')
+    }
+    if (openingRank >= closingRank) {
+      return alert('Opening rank must be less than closing rank')
+    }
 
     setLoading(true)
     try {
@@ -122,13 +128,13 @@ const Recommendations = () => {
     }
   }
 
-  /* ---------------- Auto Refresh (Debounced) ---------------- */
+  /* ---------------- Initial Load Trigger ---------------- */
   useEffect(() => {
-    if (user?.kcet_rank && openingRank && closingRank) {
-      const t = setTimeout(loadRecommendations, 300)
-      return () => clearTimeout(t)
+    if (user?.kcet_rank && openingRank > 0 && closingRank > 0 && !hasInitialLoaded) {
+      loadRecommendations()
+      setHasInitialLoaded(true)
     }
-  }, [category, year, round, selectedCluster, openingRank, closingRank])
+  }, [user, openingRank, closingRank, hasInitialLoaded])
 
   /* ---------------- Add Choice ---------------- */
   const addToChoices = async (id: string) => {
