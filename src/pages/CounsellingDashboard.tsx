@@ -12,6 +12,10 @@ const CounsellingDashboard = () => {
   const [saving, setSaving] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
 
+  // Selection states
+  const [selectedChoiceIds, setSelectedChoiceIds] = useState<Set<number>>(new Set())
+  const [deletingBulk, setDeletingBulk] = useState(false)
+
   // compute the best display name once
   const displayName = useMemo(() => {
     // 1) if backend sent a name, show first name
@@ -90,6 +94,49 @@ const CounsellingDashboard = () => {
       await loadChoices()
     } catch {
       alert('Error removing choice')
+    }
+  }
+
+  /* ---------------- Toggle Checkboxes ---------------- */
+  const toggleSelectRow = (choiceId: number) => {
+    setSelectedChoiceIds(prev => {
+      const next = new Set(prev)
+      if (next.has(choiceId)) {
+        next.delete(choiceId)
+      } else {
+        next.add(choiceId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const allSelected = choices.length > 0 && choices.every(c => selectedChoiceIds.has(c.choice_id))
+    setSelectedChoiceIds(prev => {
+      const next = new Set(prev)
+      if (allSelected) {
+        choices.forEach(c => next.delete(c.choice_id))
+      } else {
+        choices.forEach(c => next.add(c.choice_id))
+      }
+      return next
+    })
+  }
+
+  /* ---------------- Execute Bulk Delete ---------------- */
+  const removeSelectedChoices = async () => {
+    if (selectedChoiceIds.size === 0) return
+    if (!confirm(`Are you sure you want to remove the ${selectedChoiceIds.size} selected choice(s)?`)) return
+    setDeletingBulk(true)
+    try {
+      await counsellingService.choices.bulkDelete(Array.from(selectedChoiceIds))
+      setSelectedChoiceIds(new Set())
+      await loadChoices()
+      alert('Selected choices removed successfully!')
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error removing selected choices')
+    } finally {
+      setDeletingBulk(false)
     }
   }
 
@@ -204,6 +251,22 @@ const CounsellingDashboard = () => {
               My Personal List ({choices.length})
             </h2>
             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              {selectedChoiceIds.size > 0 && (
+                <button
+                  onClick={removeSelectedChoices}
+                  disabled={deletingBulk}
+                  className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md transition text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5"
+                >
+                  {deletingBulk ? (
+                    <>
+                      <span className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Removing...
+                    </>
+                  ) : (
+                    `🗑️ Remove Selected (${selectedChoiceIds.size})`
+                  )}
+                </button>
+              )}
               <button
                 onClick={exportChoicesToPdf}
                 disabled={exportingPdf}
@@ -222,7 +285,7 @@ const CounsellingDashboard = () => {
               )}
             </div>
           </div>
-
+ 
           {choices.length === 0 ? (
             <p className="text-sm sm:text-base text-slate-500 dark:text-gray-400">No choices saved yet</p>
           ) : (
@@ -231,6 +294,14 @@ const CounsellingDashboard = () => {
                 <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                   <thead className="bg-slate-50 dark:bg-slate-700 sticky top-0">
                     <tr>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left w-12">
+                        <input
+                          type="checkbox"
+                          checked={choices.length > 0 && choices.every(c => selectedChoiceIds.has(c.choice_id))}
+                          onChange={toggleSelectAll}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-750 dark:border-slate-600 cursor-pointer"
+                        />
+                      </th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px]">
                         College Code
                       </th>
@@ -266,6 +337,14 @@ const CounsellingDashboard = () => {
                           draggedIndex === index ? 'opacity-50' : ''
                         }`}
                       >
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={selectedChoiceIds.has(choice.choice_id)}
+                            onChange={() => toggleSelectRow(choice.choice_id)}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-750 dark:border-slate-600 cursor-pointer"
+                          />
+                        </td>
                         <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-900 dark:text-gray-100">
                           {choice.unique_key_data?.college.college_code || 'N/A'}
                         </td>

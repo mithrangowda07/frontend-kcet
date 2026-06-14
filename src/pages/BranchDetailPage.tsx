@@ -363,9 +363,25 @@ const pickBestOutcome = (
   };
 };
 
+const useWindowWidth = () => {
+  const [width, setWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return width;
+};
+
 const BranchDetailPage = () => {
   const { publicId } = useParams<{ publicId: string }>();
   const { user } = useAuth();
+  const width = useWindowWidth();
+  const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+
   const [branch, setBranch] = useState<Branch | null>(null);
   const [cutoff, setCutoff] = useState<BranchCutoffResponse | null>(null);
   const [reviews, setReviews] = useState<BranchReviewResponse | null>(null);
@@ -633,8 +649,8 @@ const BranchDetailPage = () => {
       </div>
 
       {/* Cutoff */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8 border border-slate-300 dark:border-slate-700">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-3 sm:p-6 mb-8 border border-slate-300 dark:border-slate-700">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
           <h2 className="text-xl font-semibold text-slate-800 dark:text-gray-100">
             Cutoff Trends
           </h2>
@@ -642,7 +658,7 @@ const BranchDetailPage = () => {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="border border-slate-300 dark:border-slate-600 rounded px-3 py-1 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-[36px] px-3 py-2 sm:py-1 text-sm sm:text-base border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
           >
             <option value="">All Categories</option>
             {categories.map((cat) => (
@@ -658,48 +674,65 @@ const BranchDetailPage = () => {
             const data = prepareChartData(cutoff?.categories?.[cat]);
             if (!data.length) return null;
 
+            const chartHeight = isMobile ? 220 : isTablet ? 300 : 380;
+
             return (
               <div
                 key={cat}
-                className="rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 p-4"
+                className="rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 p-3 sm:p-4"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium text-slate-900 dark:text-gray-100">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+                  <h3 className="font-semibold text-sm sm:text-base text-slate-900 dark:text-gray-100">
                     Category: {cat}
                   </h3>
-                  <span className="text-xs px-2 py-1 rounded-full bg-blue-50 dark:bg-sky-900/30 text-blue-700 dark:text-sky-300 border border-blue-100 dark:border-sky-800">
+                  <span className="text-xs self-start sm:self-auto px-2 py-1 rounded-full bg-blue-50 dark:bg-sky-900/30 text-blue-700 dark:text-sky-300 border border-blue-100 dark:border-sky-800">
                     2022-25 • R1-R3
                   </span>
                 </div>
-                <ResponsiveContainer width="100%" height={230}>
-                  <LineChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="year" />
-                    <YAxis />
-                    <Tooltip content={renderTooltip} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="R1"
-                      stroke="#16a34a"
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="R2"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="R3"
-                      stroke="#dc2626"
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                
+                <div className="w-full animate-fade-in" style={{ height: chartHeight }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis 
+                        dataKey="year" 
+                        tick={{ fontSize: isMobile ? 10 : 12 }} 
+                      />
+                      <YAxis 
+                        tick={{ fontSize: isMobile ? 10 : 12 }} 
+                        width={isMobile ? 35 : 55}
+                      />
+                      <Tooltip content={renderTooltip} />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36} 
+                        iconSize={isMobile ? 8 : 12}
+                        wrapperStyle={isMobile ? { fontSize: '10px', paddingTop: 10 } : { fontSize: '12px' }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="R1"
+                        stroke="#16a34a"
+                        strokeWidth={2}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="R2"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="R3"
+                        stroke="#dc2626"
+                        strokeWidth={2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
 
-                <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/80 dark:border-cyan-400/20 bg-white dark:bg-[#071224] shadow-[0_0_20px_rgba(34,211,238,0.08)] dark:shadow-[0_0_20px_rgba(34,211,238,0.05)]">
+                {/* Desktop/Tablet Table (768px and up) */}
+                <div className="hidden md:block mt-4 overflow-x-auto rounded-xl border border-slate-200/80 dark:border-cyan-400/20 bg-white dark:bg-[#071224] shadow-[0_0_20px_rgba(34,211,238,0.08)] dark:shadow-[0_0_20px_rgba(34,211,238,0.05)]">
                   <table className="w-full text-sm min-w-[280px]">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-cyan-500/10 bg-slate-50 dark:bg-cyan-500/5">
@@ -739,6 +772,31 @@ const BranchDetailPage = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Cards Layout (below 768px) */}
+                <div className="block md:hidden mt-4 space-y-3">
+                  {data.map((row) => (
+                    <div key={row.year} className="rounded-xl border border-slate-200 dark:border-cyan-400/20 bg-white dark:bg-[#071224] p-3 shadow-sm">
+                      <div className="flex justify-between items-center border-b border-slate-100 dark:border-cyan-500/10 pb-1.5 mb-2">
+                        <span className="font-semibold text-xs text-slate-700 dark:text-gray-200">Year: {row.year}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-[11px] sm:text-xs">
+                        <div className="rounded bg-emerald-50/50 dark:bg-emerald-950/20 p-2 border border-emerald-100/50 dark:border-emerald-900/30">
+                          <span className="block text-slate-500 dark:text-emerald-300 font-medium mb-0.5">R1</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm">{row.tooltipR1}</span>
+                        </div>
+                        <div className="rounded bg-blue-50/50 dark:bg-blue-950/20 p-2 border border-blue-100/50 dark:border-blue-900/30">
+                          <span className="block text-slate-500 dark:text-blue-300 font-medium mb-0.5">R2</span>
+                          <span className="font-bold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{row.tooltipR2}</span>
+                        </div>
+                        <div className="rounded bg-red-50/50 dark:bg-red-950/20 p-2 border border-red-100/50 dark:border-red-900/30">
+                          <span className="block text-slate-500 dark:text-red-300 font-medium mb-0.5">R3</span>
+                          <span className="font-bold text-red-600 dark:text-red-400 text-xs sm:text-sm">{row.tooltipR3}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             );

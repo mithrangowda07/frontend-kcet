@@ -24,6 +24,19 @@ const Recommendations = () => {
   const [closingRank, setClosingRank] = useState(0)
   const [hasInitialLoaded, setHasInitialLoaded] = useState(false)
 
+  // Bulk add states
+  const [selectedPublicIds, setSelectedPublicIds] = useState<Set<string>>(new Set())
+  const [bulkAdding, setBulkAdding] = useState(false)
+  const [confirmModalData, setConfirmModalData] = useState<{
+    isOpen: boolean
+    isSelectedOnly: boolean
+    totalVisible: number
+    alreadyAdded: number
+    willAdd: number
+  } | null>(null)
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [resultModalData, setResultModalData] = useState<{ added: number; skipped: number; failed: number } | null>(null)
+
   /* ---------------- Display Name ---------------- */
   const displayName = useMemo(() => {
     const full = user?.name?.trim()
@@ -153,6 +166,125 @@ const Recommendations = () => {
     return choices.some(choice => choice.unique_key_data?.public_id === publicId)
   }
 
+  /* ---------------- Toggle Checkboxes ---------------- */
+  const toggleSelectRow = (publicId: string) => {
+    setSelectedPublicIds(prev => {
+      const next = new Set(prev)
+      if (next.has(publicId)) {
+        next.delete(publicId)
+      } else {
+        next.add(publicId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const unadded = recommendations.filter(r => !isInChoices(r.public_id))
+    const allSelected = unadded.length > 0 && unadded.every(r => selectedPublicIds.has(r.public_id))
+
+    setSelectedPublicIds(prev => {
+      const next = new Set(prev)
+      if (allSelected) {
+        unadded.forEach(r => next.delete(r.public_id))
+      } else {
+        unadded.forEach(r => next.add(r.public_id))
+      }
+      return next
+    })
+  }
+
+  /* ---------------- Trigger Bulk Add Confirmation ---------------- */
+  const handleBulkAdd = (isSelectedOnly: boolean) => {
+    if (isSelectedOnly) {
+      const selectedRecs = recommendations.filter(r => selectedPublicIds.has(r.public_id))
+      if (selectedRecs.length === 0) return
+      
+      setConfirmModalData({
+        isOpen: true,
+        isSelectedOnly: true,
+        totalVisible: selectedRecs.length,
+        alreadyAdded: 0,
+        willAdd: selectedRecs.length,
+      })
+    } else {
+      const totalVisible = recommendations.length
+      const alreadyAdded = recommendations.filter(r => isInChoices(r.public_id)).length
+      const willAdd = recommendations.filter(r => !isInChoices(r.public_id)).length
+
+      if (willAdd === 0) {
+        alert("All visible recommendations are already in your choices.")
+        return
+      }
+
+      setConfirmModalData({
+        isOpen: true,
+        isSelectedOnly: false,
+        totalVisible,
+        alreadyAdded,
+        willAdd,
+      })
+    }
+  }
+
+  /* ---------------- Execute Bulk Add ---------------- */
+  const executeBulkAdd = async () => {
+    if (!confirmModalData) return
+    setBulkAdding(true)
+    try {
+      // Collect target recommendations
+      const targetRecs = recommendations.filter(r => {
+        if (confirmModalData.isSelectedOnly) {
+          return selectedPublicIds.has(r.public_id)
+        }
+        return !isInChoices(r.public_id)
+      })
+
+      // Construct choices format expected by the API
+      const choicesToAdd = targetRecs.map(r => ({
+        collegeCode: r.college.college_code,
+        branchCode: r.branch.branch_id,
+        year: parseInt(year, 10),
+        round: round,
+        category: category || 'GM',
+      }))
+
+      const res = await counsellingService.choices.bulkAdd(choicesToAdd)
+
+      // Close confirmation modal
+      setConfirmModalData(null)
+      
+      // Clear selected list
+      setSelectedPublicIds(new Set())
+
+      // Show success / fail notification
+      if (res.failed > 0) {
+        setResultModalData({
+          added: res.added,
+          skipped: res.skipped,
+          failed: res.failed,
+        })
+      } else {
+        showToast(`✓ Successfully added ${res.added} colleges. Skipped: ${res.skipped} already present`, 'success')
+      }
+
+      // Reload choices to update UI instantly
+      await loadChoices()
+
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error during bulk choices addition')
+    } finally {
+      setBulkAdding(false)
+    }
+  }
+
+  const showToast = (text: string, type: 'success' | 'error') => {
+    setToastMessage({ text, type })
+    setTimeout(() => {
+      setToastMessage(null)
+    }, 4000)
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* ---------------- Header ---------------- */}
@@ -172,81 +304,100 @@ const Recommendations = () => {
       {/* ---------------- Card ---------------- */}
       <div className="bg-white dark:bg-slate-900/70 p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
 
-        {/* -------- Filters -------- */}
-        <div className="flex flex-nowrap gap-4 items-end overflow-x-auto mb-6
-                        bg-slate-50 dark:bg-slate-800
-                        rounded-lg px-4 py-3">
+        {/* -------- Filters & Actions -------- */}
+        <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end justify-between mb-6 bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3">
+          <div className="flex flex-nowrap gap-4 items-end overflow-x-auto pb-2 lg:pb-0">
+            <Filter label="Category">
+              <select value={category} onChange={e => setCategory(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+                <option value="">All</option>
+                {categories.map(c => (
+                  <option key={c.category}>{c.category}</option>
+                ))}
+              </select>
+            </Filter>
 
-          <Filter label="Category">
-            <select value={category} onChange={e => setCategory(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+            <Filter label="Year">
+              <select value={year} onChange={e => setYear(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+                {['2025', '2024', '2023', '2022'].map(y => (
+                  <option key={y}>{y}</option>
+                ))}
+              </select>
+            </Filter>
+
+            <Filter label="Round">
+              <select value={round} onChange={e => setRound(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+                <option value="R1">Round 1</option>
+                <option value="R2">Round 2</option>
+                <option value="R3">Round 3</option>
+              </select>
+            </Filter>
+
+            <Filter label="Cluster">
+              <select
+                value={selectedCluster}
+                onChange={e => setSelectedCluster(e.target.value)}
+                className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+              >
+                <option value="">All</option>
+                {clusters.map(c => {
+                  const code = c.cluster_code || (c as any)._id;
+                  return (
+                    <option key={code} value={code}>
+                      {c.cluster_name}
+                    </option>
+                  );
+                })}
+              </select>
+            </Filter>
                 
-              <option value="">All</option>
-              {categories.map(c => (
-                <option key={c.category}>{c.category}</option>
-              ))}
-            </select>
-          </Filter>
+            <Filter label="Opening Rank">
+              <input
+                type="number"
+                value={openingRank}
+                onChange={e => setOpeningRank(+e.target.value)}
+                className="pr-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+              />
+            </Filter>
 
-          <Filter label="Year">
-            <select value={year} onChange={e => setYear(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
-              {['2025', '2024', '2023', '2022'].map(y => (
-                <option key={y}>{y}</option>
-              ))}
-            </select>
-          </Filter>
+            <Filter label="Closing Rank">
+              <input
+                type="number"
+                value={closingRank}
+                onChange={e => setClosingRank(+e.target.value)}
+                className="pr-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+              />
+            </Filter>
+          </div>
 
-          <Filter label="Round">
-            <select value={round} onChange={e => setRound(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
-              <option value="R1">Round 1</option>
-              <option value="R2">Round 2</option>
-              <option value="R3">Round 3</option>
-            </select>
-          </Filter>
-
-          <Filter label="Cluster">
-            <select
-              value={selectedCluster}
-              onChange={e => setSelectedCluster(e.target.value)}
-              className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mt-3 lg:mt-0">
+            <button
+              onClick={loadRecommendations}
+              disabled={loading || bulkAdding}
+              className="bg-blue-600 dark:bg-sky-400 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 dark:hover:bg-sky-500 transition disabled:opacity-50 min-h-[40px] sm:min-h-0 flex items-center justify-center font-medium"
             >
-              <option value="">All</option>
-              {clusters.map(c => {
-                const code = c.cluster_code || (c as any)._id;
-                return (
-                  <option key={code} value={code}>
-                    {c.cluster_name}
-                  </option>
-                );
-              })}
-            </select>
-          </Filter>
-              
-          <Filter label="Opening Rank">
-            <input
-              type="number"
-              value={openingRank}
-              onChange={e => setOpeningRank(+e.target.value)}
-              className="pr-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-            />
-          </Filter>
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
 
-          <Filter label="Closing Rank">
-            <input
-              type="number"
-              value={closingRank}
-              onChange={e => setClosingRank(+e.target.value)}
-              className="pr-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-            />
-          </Filter>
+            {recommendations.length > 0 && (
+              <>
+                <button
+                  onClick={() => handleBulkAdd(true)}
+                  disabled={loading || bulkAdding || selectedPublicIds.size === 0}
+                  className="bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white px-4 py-2 rounded-md text-sm transition disabled:opacity-40 min-h-[40px] sm:min-h-0 flex items-center justify-center gap-1.5 font-semibold"
+                >
+                  <span>✓</span> Add Selected ({selectedPublicIds.size})
+                </button>
 
-          <button
-            onClick={loadRecommendations}
-            disabled={loading}
-            className="bg-blue-600 dark:bg-sky-400 text-white px-4 py-2 rounded-md text-sm
-                       hover:bg-blue-700 dark:hover:bg-sky-500 transition disabled:opacity-50"
-          >
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
+                <button
+                  onClick={() => handleBulkAdd(false)}
+                  disabled={loading || bulkAdding || recommendations.filter(r => !isInChoices(r.public_id)).length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white px-4 py-2 rounded-md text-sm transition disabled:opacity-40 min-h-[40px] sm:min-h-0 flex items-center justify-center gap-1.5 font-semibold"
+                >
+                  <span>➕</span> Add All to Choices
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* -------- Table -------- */}
@@ -259,6 +410,17 @@ const Recommendations = () => {
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
               <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr>
+                  <th className="px-6 py-3 text-left w-12">
+                    <input
+                      type="checkbox"
+                      checked={
+                        recommendations.filter(r => !isInChoices(r.public_id)).length > 0 &&
+                        recommendations.filter(r => !isInChoices(r.public_id)).every(r => selectedPublicIds.has(r.public_id))
+                      }
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">College Code</th>
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">College</th>
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">Branch</th>
@@ -273,6 +435,23 @@ const Recommendations = () => {
                     key={r.public_id}
                     className="hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
                   >
+                    <td className="px-6 py-3">
+                      {!isInChoices(r.public_id) ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedPublicIds.has(r.public_id)}
+                          onChange={() => toggleSelectRow(r.public_id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer"
+                        />
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          className="rounded border-slate-200 text-green-600 h-4 w-4 bg-slate-100 dark:bg-slate-800 dark:border-slate-700 opacity-60 cursor-not-allowed"
+                        />
+                      )}
+                    </td>
                     <td className="px-6 py-3 font-semibold text-slate-900 dark:text-gray-100">
                       {r.college.college_code || 'N/A'}
                     </td>
@@ -322,6 +501,111 @@ const Recommendations = () => {
           </div>
         )}
       </div>
+
+      {/* ---------------- Toast Notification ---------------- */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 animate-pulse">
+          <div className={`flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl text-white font-medium ${
+            toastMessage.type === 'success' ? 'bg-emerald-600 dark:bg-emerald-500' : 'bg-red-600 dark:bg-red-500'
+          }`}>
+            <span className="text-lg">✓</span>
+            <span>{toastMessage.text}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- Confirmation Modal ---------------- */}
+      {confirmModalData && confirmModalData.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <span>📋</span> Add Recommendations
+            </h3>
+            
+            <div className="space-y-3 mb-6 text-sm text-slate-600 dark:text-gray-300">
+              <div className="flex justify-between border-b border-slate-100 dark:border-slate-700/50 pb-2">
+                <span>Visible Colleges:</span>
+                <span className="font-semibold text-slate-800 dark:text-gray-100">{confirmModalData.totalVisible}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 dark:border-slate-700/50 pb-2">
+                <span>Already Added:</span>
+                <span className="font-semibold text-slate-800 dark:text-gray-100">{confirmModalData.alreadyAdded}</span>
+              </div>
+              <div className="flex justify-between pb-1 text-sky-600 dark:text-sky-400 font-medium">
+                <span>New Additions:</span>
+                <span className="font-bold text-slate-800 dark:text-gray-100">{confirmModalData.willAdd}</span>
+              </div>
+            </div>
+
+            <p className="text-slate-600 dark:text-gray-300 text-sm mb-6">
+              Do you want to add all {confirmModalData.willAdd} new colleges to your choice list?
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmModalData(null)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-600 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeBulkAdd}
+                disabled={bulkAdding}
+                className="px-5 py-2 text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white shadow-md disabled:opacity-50 flex items-center gap-2"
+              >
+                {bulkAdding ? (
+                  <>
+                    <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    Adding Colleges...
+                  </>
+                ) : (
+                  `Add ${confirmModalData.willAdd} Colleges`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- Detailed Results Modal ---------------- */}
+      {resultModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <span>📊</span> Choice Addition Results
+            </h3>
+            
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30">
+                <span className="text-emerald-700 dark:text-emerald-300 font-semibold">Added Successfully</span>
+                <span className="text-lg font-bold text-emerald-800 dark:text-emerald-200">{resultModalData.added}</span>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <span className="text-slate-600 dark:text-gray-300 font-semibold">Skipped (Already Present)</span>
+                <span className="text-lg font-bold text-slate-700 dark:text-gray-200">{resultModalData.skipped}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30">
+                <span className="text-red-700 dark:text-red-300 font-semibold">Failed to Add</span>
+                <span className="text-lg font-bold text-red-800 dark:text-red-200">{resultModalData.failed}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResultModalData(null)}
+                className="px-5 py-2 text-sm font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-md transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

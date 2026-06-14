@@ -444,6 +444,20 @@ export const counsellingService = {
       return response.data
     },
 
+    bulkAdd: async (choices: Array<{ collegeCode: string; branchCode: string; year: number; round: string; category: string }>): Promise<{ success: boolean; added: number; skipped: number; failed: number }> => {
+      const response = await api.post('/counselling/choices/bulk-add/', {
+        choices,
+      })
+      return response.data
+    },
+
+    bulkDelete: async (choiceIds: Array<string | number>): Promise<{ success: boolean; deleted: number }> => {
+      const response = await api.post('/counselling/choices/bulk-delete/', {
+        choiceIds,
+      })
+      return response.data
+    },
+
     delete: async (choiceId: number): Promise<void> => {
       await api.delete(`/counselling/choices/${choiceId}/delete/`)
     },
