@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
+import Footer from '../../components/Footer'
 
 export default function AdminLogin() {
   const { login, isAuthenticated, loading } = useAdminAuth()
@@ -32,9 +33,10 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-[#111827]">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Login</h1>
+    <div className="flex min-h-screen flex-col justify-between bg-slate-50 dark:bg-[#111827]">
+      <div className="flex flex-grow items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Login</h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
           KCET EduGuide — branch insights management
         </p>
@@ -79,7 +81,9 @@ export default function AdminLogin() {
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        </div>
       </div>
+      <Footer />
     </div>
   )
 }

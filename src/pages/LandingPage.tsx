@@ -283,25 +283,6 @@ const LandingPage = () => {
           </button>
         </div>
       </div>
-
-      {/* Disclaimer */}
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border-t border-yellow-200 dark:border-yellow-800 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200 text-center">
-            <strong>Disclaimer:</strong> The cutoffs are taken only from the
-            official KCET counselling website. For further confirmation, you may
-            visit the{" "}
-            <a
-              href="https://cetonline.karnataka.gov.in/kea/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-yellow-600 dark:text-yellow-400"
-            >
-            official KCET website.
-            </a>
-          </p>
-        </div>
-      </div>
     </div>
   );
 };

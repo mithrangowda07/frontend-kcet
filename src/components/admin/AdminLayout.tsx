@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import Footer from '../Footer'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `block rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -83,10 +84,11 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-4 py-8">
+      <main className="flex-1 overflow-y-auto flex flex-col justify-between">
+        <div className="mx-auto max-w-6xl w-full px-4 py-8 flex-grow">
           <Outlet />
         </div>
+        <Footer />
       </main>
     </div>
   )

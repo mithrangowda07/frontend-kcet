@@ -189,7 +189,7 @@ const CounsellingDashboard = () => {
         const pageHeight = doc.internal.pageSize.getHeight()
         doc.setTextColor(220, 220, 220)
         doc.setFontSize(48)
-        doc.text('KCET-Helper', pageWidth / 2, pageHeight / 2, {
+        doc.text('KCET-EduGuide', pageWidth / 2, pageHeight / 2, {
           angle: -30,
           align: 'center',
         })

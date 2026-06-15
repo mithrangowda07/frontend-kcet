@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import LandingPage from './pages/LandingPage'
 import LoginRegister from './pages/LoginRegister'
 import RegisterRoleSelection from './pages/RegisterRoleSelection'
@@ -33,9 +34,10 @@ function AppShell() {
   const isAdminRoute = location.pathname.startsWith('/admin')
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#111827]">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#111827]">
       {!isAdminRoute && <Navbar />}
-      <Routes>
+      <div className="flex-grow">
+        <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<LoginRegister />} />
             <Route path="/register" element={<RegisterRoleSelection />} />
@@ -113,6 +115,8 @@ function AppShell() {
             <Route path="/admin/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+      </div>
+      {!isAdminRoute && <Footer />}
     </div>
   )
 }
