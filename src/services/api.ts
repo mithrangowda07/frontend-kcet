@@ -394,7 +394,7 @@ export const counsellingService = {
     category?: string,
     year?: string,
     round?: string,
-    cluster?: string,
+    cluster?: string | string[],
     openingRank?: number,
     closingRank?: number
   ): Promise<{

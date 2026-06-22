@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { counsellingService } from '../services/api'
@@ -15,6 +15,21 @@ const CounsellingDashboard = () => {
   // Selection states
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<Set<number>>(new Set())
   const [deletingBulk, setDeletingBulk] = useState(false)
+
+  // Mobile expanded rows state
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
+
+  const toggleRowExpand = (choiceId: number) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(choiceId)) {
+        next.delete(choiceId)
+      } else {
+        next.add(choiceId)
+      }
+      return next
+    })
+  }
 
   // compute the best display name once
   const displayName = useMemo(() => {
@@ -302,88 +317,127 @@ const CounsellingDashboard = () => {
                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-750 dark:border-slate-600 cursor-pointer"
                         />
                       </th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px]">
+                      <th className="hidden md:table-cell px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px]">
                         College Code
                       </th>
                       <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-12 sm:w-16">
                         Order
                       </th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[120px]">
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[100px] md:min-w-[120px]">
                         College Name
                       </th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[100px]">
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px] md:min-w-[100px]">
                         Branch
                       </th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px]">
+                      <th className="hidden md:table-cell px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[80px]">
                         Cluster
                       </th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[60px]">
+                      <th className="hidden md:table-cell px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase min-w-[60px]">
                         Cutoff
                       </th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-16 sm:w-20">
+                      <th className="hidden md:table-cell px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-16 sm:w-20">
                         Action
+                      </th>
+                      <th className="md:hidden px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 dark:text-gray-400 uppercase w-12">
+                        Details
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
                     {choices.map((choice, index) => (
-                      <tr
-                        key={choice.choice_id}
-                        draggable
-                        onDragStart={() => handleDragStart(index)}
-                        onDragOver={(e) => handleDragOver(e, index)}
-                        onDragEnd={handleDragEnd}
-                        className={`hover:bg-slate-50 dark:hover:bg-slate-700 cursor-move ${
-                          draggedIndex === index ? 'opacity-50' : ''
-                        }`}
-                      >
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={selectedChoiceIds.has(choice.choice_id)}
-                            onChange={() => toggleSelectRow(choice.choice_id)}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-750 dark:border-slate-600 cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-900 dark:text-gray-100">
-                          {choice.unique_key_data?.college.college_code || 'N/A'}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-slate-900 dark:text-gray-100">
-                          {index + 1}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm text-slate-900 dark:text-gray-100">
-                          <Link
-                            to={`/colleges/${choice.unique_key_data?.college.public_id || ''}`}
-                            className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer break-words"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {choice.unique_key_data?.college.college_name || 'N/A'}
-                          </Link>
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm text-slate-900 dark:text-gray-100">
-                          <Link
-                            to={`/branches/${choice.unique_key_data?.public_id || ''}`}
-                            className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer break-words"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {choice.unique_key_data?.branch_name || 'N/A'}
-                          </Link>
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-slate-900 dark:text-gray-100">
-                          {choice.unique_key_data?.cluster.cluster_name || 'N/A'}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-slate-900 dark:text-gray-100">
-                          {choice.cutoff || 'N/A'}
-                        </td>
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">
-                          <button
-                            onClick={() => removeChoice(choice.choice_id)}
-                            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
+                      <Fragment key={choice.choice_id}>
+                        <tr
+                          draggable
+                          onDragStart={() => handleDragStart(index)}
+                          onDragOver={(e) => handleDragOver(e, index)}
+                          onDragEnd={handleDragEnd}
+                          className={`hover:bg-slate-50 dark:hover:bg-slate-700 cursor-move ${
+                            draggedIndex === index ? 'opacity-50' : ''
+                          }`}
+                        >
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={selectedChoiceIds.has(choice.choice_id)}
+                              onChange={() => toggleSelectRow(choice.choice_id)}
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-750 dark:border-slate-600 cursor-pointer"
+                            />
+                          </td>
+                          <td className="hidden md:table-cell px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-900 dark:text-gray-100">
+                            {choice.unique_key_data?.college.college_code || 'N/A'}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-slate-900 dark:text-gray-100">
+                            {index + 1}
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm text-slate-900 dark:text-gray-100">
+                            <Link
+                              to={`/colleges/${choice.unique_key_data?.college.public_id || ''}`}
+                              className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer break-words animate-none"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {choice.unique_key_data?.college.college_name || 'N/A'}
+                            </Link>
+                          </td>
+                          <td className="px-2 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm text-slate-900 dark:text-gray-100">
+                            <Link
+                              to={`/branches/${choice.unique_key_data?.public_id || ''}`}
+                              className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer break-words animate-none"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {choice.unique_key_data?.branch_name || 'N/A'}
+                            </Link>
+                          </td>
+                          <td className="hidden md:table-cell px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-slate-900 dark:text-gray-100">
+                            {choice.unique_key_data?.cluster.cluster_name || 'N/A'}
+                          </td>
+                          <td className="hidden md:table-cell px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-slate-900 dark:text-gray-100">
+                            {choice.cutoff || 'N/A'}
+                          </td>
+                          <td className="hidden md:table-cell px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">
+                            <button
+                              onClick={() => removeChoice(choice.choice_id)}
+                              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                          <td className="md:hidden px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center text-xs sm:text-sm">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRowExpand(choice.choice_id);
+                              }}
+                              className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 p-1.5 focus:outline-none text-base"
+                              aria-label="Toggle details"
+                            >
+                              {expandedRows.has(choice.choice_id) ? '▲' : '▼'}
+                            </button>
+                          </td>
+                        </tr>
+                        {/* Expanded details row for mobile */}
+                        <tr className="md:hidden">
+                          <td colSpan={5} className={`px-4 transition-all duration-300 ${expandedRows.has(choice.choice_id) ? 'py-3 bg-slate-50/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-700' : 'py-0 border-none'}`}>
+                            <div className={`overflow-hidden transition-all duration-300 ${expandedRows.has(choice.choice_id) ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
+                              <div className="space-y-2 text-xs text-slate-700 dark:text-gray-300">
+                                <div><strong>College Code:</strong> {choice.unique_key_data?.college.college_code || 'N/A'}</div>
+                                <div><strong>Cluster:</strong> {choice.unique_key_data?.cluster.cluster_name || 'N/A'}</div>
+                                <div><strong>Cutoff:</strong> {choice.cutoff || 'N/A'}</div>
+                                <div className="pt-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeChoice(choice.choice_id);
+                                    }}
+                                    className="bg-red-150 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900 text-red-650 dark:text-red-400 px-3 py-1.5 rounded text-xs font-semibold transition-colors"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

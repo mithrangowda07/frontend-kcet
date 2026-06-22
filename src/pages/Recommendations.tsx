@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { counsellingService, categoryService, clusterService } from '../services/api'
@@ -15,7 +15,9 @@ const Recommendations = () => {
   const [categories, setCategories] = useState<Category[]>([])
 
   const [clusters, setClusters] = useState<Cluster[]>([])
-  const [selectedCluster, setSelectedCluster] = useState('')
+  const [selectedClusters, setSelectedClusters] = useState<string[]>(['all'])
+  const [isClusterDropdownOpen, setIsClusterDropdownOpen] = useState(false)
+  const clusterDropdownRef = useRef<HTMLDivElement>(null)
 
   const [year, setYear] = useState('2025')
   const [round, setRound] = useState('R1')
@@ -23,6 +25,51 @@ const Recommendations = () => {
   const [openingRank, setOpeningRank] = useState(0)
   const [closingRank, setClosingRank] = useState(0)
   const [hasInitialLoaded, setHasInitialLoaded] = useState(false)
+
+  // Mobile collapsed filter state
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true)
+
+  // Mobile expanded recommendation cards state
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+
+  // Floating scroll-to-top button state
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  const toggleCardExpand = (publicId: string) => {
+    setExpandedCards(prev => {
+      const next = new Set(prev)
+      if (next.has(publicId)) {
+        next.delete(publicId)
+      } else {
+        next.add(publicId)
+      }
+      return next
+    })
+  }
+
+  // Scroll listener for floating scroll-to-top button
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true)
+      } else {
+        setShowScrollTop(false)
+      }
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Ref-based outside click handler for Cluster Dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (clusterDropdownRef.current && !clusterDropdownRef.current.contains(event.target as Node)) {
+        setIsClusterDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Bulk add states
   const [selectedPublicIds, setSelectedPublicIds] = useState<Set<string>>(new Set())
@@ -129,7 +176,7 @@ const Recommendations = () => {
         category || undefined,
         year,
         round,
-        selectedCluster || undefined,
+        selectedClusters.includes('all') || selectedClusters.length === 0 ? undefined : selectedClusters,
         openingRank,
         closingRank
       )
@@ -142,6 +189,174 @@ const Recommendations = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleToggleCluster = (code: string) => {
+    const allCodes = clusters.map(c => c.cluster_code || (c as any)._id)
+
+    if (code === 'all') {
+      if (selectedClusters.includes('all')) {
+        setSelectedClusters([])
+      } else {
+        setSelectedClusters(['all'])
+      }
+      return
+    }
+
+    let next: string[]
+    if (selectedClusters.includes('all')) {
+      next = allCodes.filter(c => c !== code)
+    } else {
+      if (selectedClusters.includes(code)) {
+        next = selectedClusters.filter(c => c !== code)
+      } else {
+        next = [...selectedClusters, code]
+      }
+    }
+
+    const containsAllIndividual = allCodes.every(c => next.includes(c))
+    if (containsAllIndividual && allCodes.length > 0) {
+      setSelectedClusters(['all'])
+    } else {
+      setSelectedClusters(next)
+    }
+  }
+
+  const handleRemoveCluster = (code: string) => {
+    if (code === 'all') {
+      setSelectedClusters([])
+    } else {
+      setSelectedClusters(prev => prev.filter(c => c !== code))
+    }
+  }
+
+  const handleResetFilters = () => {
+    setCategory(user?.category || 'GM')
+    setYear('2025')
+    setRound('R1')
+    setSelectedClusters(['all'])
+    if (user?.kcet_rank) {
+      const rank = user.kcet_rank
+      let open = 0
+      let close = 0
+      if (rank <= 1000) {
+        open = Math.floor(rank * 0.35023)
+        close = Math.floor(rank * 3.5782)
+      } else if (rank <= 5000) {
+        open = Math.floor(rank * 0.40124)
+        close = Math.floor(rank * 3.012568)
+      } else if (rank <= 20000) {
+        open = Math.floor(rank * 0.45123)
+        close = Math.floor(rank * 2.058123)
+      } else if (rank <= 35000) {
+        open = Math.floor(rank * 0.55125)
+        close = Math.floor(rank * 1.816358)
+      } else if (rank <= 50000) {
+        open = Math.floor(rank * 0.601236)
+        close = Math.floor(rank * 1.6136524)
+      } else {
+        open = Math.floor(rank * 0.70265)
+        close = Math.floor(rank * 1.412486)
+      }
+      setOpeningRank(open)
+      setClosingRank(close)
+    }
+  }
+
+  const renderClusterDropdown = (isMobile: boolean = false) => {
+    const minHeightClass = isMobile ? 'min-h-[48px]' : 'min-h-[40px]'
+    return (
+      <div ref={clusterDropdownRef} className="relative w-full md:w-64">
+        <div
+          onClick={() => setIsClusterDropdownOpen(!isClusterDropdownOpen)}
+          className={`flex items-center justify-between px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm ${minHeightClass}`}
+        >
+          <div className="flex flex-wrap gap-1.5 items-center mr-2">
+            {selectedClusters.length === 0 ? (
+              <span className="text-slate-400 dark:text-slate-400 text-sm">Select Clusters</span>
+            ) : selectedClusters.includes('all') ? (
+              <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300 px-2 py-0.5 rounded-full text-xs font-semibold">
+                All Clusters
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleRemoveCluster('all')
+                  }}
+                  className="hover:text-red-500 font-bold ml-1 focus:outline-none"
+                >
+                  ✕
+                </button>
+              </span>
+            ) : (
+              selectedClusters.map((code) => {
+                const cl = clusters.find((c) => (c.cluster_code || (c as any)._id) === code)
+                return (
+                  <span
+                    key={code}
+                    className="inline-flex items-center gap-1 bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300 px-2 py-0.5 rounded-full text-xs font-semibold"
+                  >
+                    {cl ? cl.cluster_name.replace(/\s+cluster$/i, '') : code}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveCluster(code)
+                      }}
+                      className="hover:text-red-500 font-bold ml-1 focus:outline-none"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )
+              })
+            )}
+          </div>
+          <span className="text-slate-400 dark:text-slate-500 text-xs ml-auto">
+            {isClusterDropdownOpen ? '▲' : '▼'}
+          </span>
+        </div>
+
+        {isClusterDropdownOpen && (
+          <div className="absolute left-0 mt-1 w-full max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1">
+            {/* Option: All Clusters */}
+            <label className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedClusters.includes('all')}
+                onChange={() => handleToggleCluster('all')}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer mr-2.5"
+              />
+              <span className="text-xs sm:text-sm text-slate-800 dark:text-gray-200 font-semibold">
+                All Clusters
+              </span>
+            </label>
+
+            {/* Option items */}
+            {clusters.map((c) => {
+              const code = c.cluster_code || (c as any)._id
+              const isChecked = selectedClusters.includes(code) || selectedClusters.includes('all')
+              return (
+                <label
+                  key={code}
+                  className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => handleToggleCluster(code)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer mr-2.5"
+                  />
+                  <span className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 font-medium">
+                    {c.cluster_name}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
   }
 
   /* ---------------- Initial Load Trigger ---------------- */
@@ -288,10 +503,21 @@ const Recommendations = () => {
     }, 4000)
   }
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (category) count++
+    if (year) count++
+    if (round) count++
+    if (selectedClusters.length > 0 && !selectedClusters.includes('all')) count++
+    if (openingRank > 0) count++
+    if (closingRank > 0) count++
+    return count
+  }, [category, year, round, selectedClusters, openingRank, closingRank])
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* ---------------- Header ---------------- */}
-      <div className="mb-6">
+    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
+      {/* ---------------- Desktop Header ---------------- */}
+      <div className="hidden md:block mb-6">
         <h1 className="text-3xl font-bold text-slate-800 dark:text-gray-100">
           College Recommendation
         </h1>
@@ -304,9 +530,22 @@ const Recommendations = () => {
         </p>
       </div>
 
-      {/* ---------------- Card ---------------- */}
-      <div className="bg-white dark:bg-slate-900/70 p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+      {/* ---------------- Mobile Header ---------------- */}
+      <div className="md:hidden mb-5">
+        <h1 className="text-2xl font-extrabold text-slate-800 dark:text-gray-100 tracking-tight">
+          College Recommendation
+        </h1>
+        <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+          Welcome, <strong className="text-slate-700 dark:text-gray-300">{displayName}</strong>
+        </p>
+        <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300">
+          KCET Rank: {user?.kcet_rank ?? 'Not set'}
+        </div>
+      </div>
 
+      {/* ---------------- Desktop Layout Container ---------------- */}
+      <div className="hidden md:block bg-white dark:bg-slate-900/70 p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+        
         {/* -------- Filters & Actions -------- */}
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end justify-between mb-6 bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3">
           <div className="flex flex-nowrap gap-4 items-end overflow-x-auto pb-2 lg:pb-0">
@@ -336,21 +575,7 @@ const Recommendations = () => {
             </Filter>
 
             <Filter label="Cluster">
-              <select
-                value={selectedCluster}
-                onChange={e => setSelectedCluster(e.target.value)}
-                className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-              >
-                <option value="">All</option>
-                {clusters.map(c => {
-                  const code = c.cluster_code || (c as any)._id;
-                  return (
-                    <option key={code} value={code}>
-                      {c.cluster_name}
-                    </option>
-                  );
-                })}
-              </select>
+              {renderClusterDropdown(false)}
             </Filter>
                 
             <Filter label="Opening Rank">
@@ -431,8 +656,7 @@ const Recommendations = () => {
                   <th className="px-6 py-3 text-left text-slate-600 dark:text-gray-400">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-700
-                                text-slate-800 dark:text-slate-200">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-800 dark:text-slate-200">
                 {recommendations.map(r => (
                   <tr
                     key={r.public_id}
@@ -461,9 +685,7 @@ const Recommendations = () => {
                     <td className="px-6 py-3">
                       <Link
                         to={`/colleges/${r.college.public_id}`}
-                        className="text-blue-600 dark:text-sky-400
-                                   hover:text-blue-800 dark:hover:text-sky-300
-                                   hover:underline cursor-pointer"
+                        className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {r.college.college_name}
@@ -472,9 +694,7 @@ const Recommendations = () => {
                     <td className="px-6 py-3">
                       <Link
                         to={`/branches/${r.public_id}`}
-                        className="text-blue-600 dark:text-sky-400
-                                   hover:text-blue-800 dark:hover:text-sky-300
-                                   hover:underline cursor-pointer"
+                        className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {r.branch.branch_name}
@@ -489,9 +709,7 @@ const Recommendations = () => {
                       ) : (
                         <button
                           onClick={() => addToChoices(r.public_id)}
-                          className="text-blue-600 dark:text-sky-400
-                                     hover:text-blue-800 dark:hover:text-sky-300
-                                     hover:underline"
+                          className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline"
                         >
                           Add to choices
                         </button>
@@ -504,6 +722,292 @@ const Recommendations = () => {
           </div>
         )}
       </div>
+
+      {/* ---------------- Mobile Layout Container ---------------- */}
+      <div className="md:hidden space-y-4">
+        
+        {/* -------- Filter Section (Collapsible Card) -------- */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-300">
+          <button
+            onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+            className="w-full px-4 py-3.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40 focus:outline-none"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 dark:text-slate-400 text-xs transition-transform duration-300">
+                {isFiltersCollapsed ? '🔽' : '🔼'}
+              </span>
+              <span className="font-bold text-slate-800 dark:text-gray-100 text-sm">
+                Filters ({activeFilterCount} Applied)
+              </span>
+            </div>
+          </button>
+
+          <div
+            className={`transition-all duration-300 overflow-hidden ${
+              isFiltersCollapsed ? 'max-h-0' : 'max-h-[800px] border-t border-slate-100 dark:border-slate-800 p-4 space-y-4'
+            }`}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
+                >
+                  <option value="">All</option>
+                  {categories.map((c) => (
+                    <option key={c.category}>{c.category}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Year</label>
+                <select
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
+                >
+                  {['2025', '2024', '2023', '2022'].map((y) => (
+                    <option key={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Round</label>
+                <select
+                  value={round}
+                  onChange={(e) => setRound(e.target.value)}
+                  className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
+                >
+                  <option value="R1">Round 1</option>
+                  <option value="R2">Round 2</option>
+                  <option value="R3">Round 3</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Cluster</label>
+                {renderClusterDropdown(true)}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Opening Rank</label>
+                <input
+                  type="number"
+                  value={openingRank}
+                  onChange={(e) => setOpeningRank(+e.target.value)}
+                  className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Closing Rank</label>
+                <input
+                  type="number"
+                  value={closingRank}
+                  onChange={(e) => setClosingRank(+e.target.value)}
+                  className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={handleResetFilters}
+                className="w-full min-h-[48px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-gray-250 rounded-lg text-sm font-semibold transition"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => {
+                  loadRecommendations()
+                  setIsFiltersCollapsed(true)
+                }}
+                className="w-full min-h-[48px] bg-blue-600 hover:bg-blue-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white rounded-lg text-sm font-semibold transition"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* -------- Action Buttons Section -------- */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={loadRecommendations}
+              disabled={loading || bulkAdding}
+              className="w-full min-h-[48px] bg-slate-600 hover:bg-slate-700 dark:bg-slate-805 dark:hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50 flex items-center justify-center"
+            >
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
+
+            <button
+              onClick={() => handleBulkAdd(true)}
+              disabled={loading || bulkAdding || selectedPublicIds.size === 0}
+              className="w-full min-h-[48px] bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white rounded-lg text-sm font-bold transition disabled:opacity-40 flex items-center justify-center gap-1.5"
+            >
+              <span>✓</span> Add Selected ({selectedPublicIds.size})
+            </button>
+          </div>
+
+          <button
+            onClick={() => handleBulkAdd(false)}
+            disabled={
+              loading || bulkAdding || recommendations.filter((r) => !isInChoices(r.public_id)).length === 0
+            }
+            className="w-full min-h-[48px] bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition disabled:opacity-40 flex items-center justify-center gap-1.5"
+          >
+            <span>➕</span> Add All to Choices
+          </button>
+        </div>
+
+        {/* -------- Recommendation Results Summary -------- */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
+          <div className="text-sm font-bold text-slate-800 dark:text-gray-100">
+            Showing {recommendations.length} colleges
+          </div>
+          <div className="text-xs text-slate-505 dark:text-gray-400 mt-1 flex flex-wrap items-center gap-1.5 font-medium">
+            <span>{category || 'GM'}</span>
+            <span>•</span>
+            <span>{year}</span>
+            <span>•</span>
+            <span>Round {round.replace('R', '')}</span>
+            <span>•</span>
+            <span>Rank {openingRank} - {closingRank}</span>
+          </div>
+        </div>
+
+        {/* -------- Recommendation Cards List -------- */}
+        {recommendations.length === 0 ? (
+          <p className="text-slate-500 dark:text-gray-400 text-sm text-center py-8">
+            {loading ? 'Loading recommendations…' : 'No recommendations found'}
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {recommendations.map((r) => {
+              const isAdded = isInChoices(r.public_id)
+              const isExpanded = expandedCards.has(r.public_id)
+              return (
+                <div
+                  key={r.public_id}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden p-4 transition-all duration-300"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="pt-0.5">
+                      {!isAdded ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedPublicIds.has(r.public_id)}
+                          onChange={() => toggleSelectRow(r.public_id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-5 w-5 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer"
+                        />
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          className="rounded border-slate-200 text-green-600 h-5 w-5 bg-slate-100 dark:bg-slate-800 dark:border-slate-700 opacity-60 cursor-not-allowed"
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-slate-805 dark:text-gray-100 break-words leading-tight">
+                        {r.college.college_name}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 break-words font-medium">
+                        {r.branch.branch_name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex justify-center border-t border-slate-100 dark:border-slate-800/80 pt-2">
+                    <button
+                      onClick={() => toggleCardExpand(r.public_id)}
+                      className="w-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 py-1.5 focus:outline-none"
+                      aria-label="Toggle details"
+                    >
+                      <span className="text-sm transition-transform duration-300">
+                        {isExpanded ? '▲' : '▼'}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ${
+                      isExpanded ? 'max-h-60 mt-3 opacity-100' : 'max-h-0 opacity-0'
+                    }`}
+                  >
+                    <div className="space-y-2 border-t border-slate-100 dark:border-slate-800/80 pt-3 text-xs text-slate-600 dark:text-gray-300">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-400 dark:text-slate-505">College Code:</span>
+                        <span className="font-bold text-slate-800 dark:text-gray-200">
+                          {r.college.college_code || 'N/A'}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-400 dark:text-slate-505">{round} Cutoff:</span>
+                        <span className="font-bold text-slate-800 dark:text-gray-200">{r.cutoff}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-400 dark:text-slate-505">Status:</span>
+                        {isAdded ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                            Added
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-805 text-slate-600 dark:text-gray-400">
+                            Not Added
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2 pt-3">
+                        <Link
+                          to={`/colleges/${r.college.public_id}`}
+                          className="w-full min-h-[48px] bg-slate-105 dark:bg-slate-800 text-slate-700 dark:text-gray-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg flex items-center justify-center font-semibold text-sm transition"
+                        >
+                          View College Details
+                        </Link>
+
+                        {!isAdded && (
+                          <button
+                            onClick={() => addToChoices(r.public_id)}
+                            className="w-full min-h-[48px] bg-blue-600 hover:bg-blue-750 dark:bg-sky-500 dark:hover:bg-sky-600 text-white rounded-lg flex items-center justify-center font-semibold text-sm transition"
+                          >
+                            Add to Choices
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ---------------- Scroll to Top Button (Mobile Only) ---------------- */}
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-50 md:hidden bg-blue-600 dark:bg-sky-500 text-white p-3.5 rounded-full shadow-lg hover:bg-blue-700 dark:hover:bg-sky-600 focus:outline-none active:scale-95 transition-all duration-200"
+          aria-label="Scroll to top"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </button>
+      )}
 
       {/* ---------------- Toast Notification ---------------- */}
       {toastMessage && (
