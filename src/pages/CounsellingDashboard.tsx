@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { counsellingService } from '../services/api'
+import { counsellingService, getUserId, getJwtExpiry } from '../services/api'
+import { cache } from '../utils/cache'
 import type { CounsellingChoice } from '../types'
 
 const CounsellingDashboard = () => {
@@ -92,8 +93,18 @@ const CounsellingDashboard = () => {
         choice_id: choice.choice_id,
         order_of_list: index + 1,
       }))
-      await counsellingService.choices.bulkUpdate(choicesToUpdate)
-      await loadChoices()
+      const updated = await counsellingService.choices.bulkUpdate(choicesToUpdate)
+      const sorted = updated.sort((a, b) => a.order_of_list - b.order_of_list)
+      setChoices(sorted)
+      setHasUnsavedChanges(false)
+      const userId = getUserId()
+      if (userId) {
+        const expiry = getJwtExpiry()
+        const ttl = expiry ? expiry - Date.now() : null
+        if (ttl === null || ttl > 0) {
+          cache.set(`choice_list_${userId}`, sorted, ttl)
+        }
+      }
       alert('Order saved successfully!')
     } catch (err: any) {
       alert(err.response?.data?.error || 'Error saving order')
@@ -106,6 +117,10 @@ const CounsellingDashboard = () => {
     if (!confirm('Remove this choice?')) return
     try {
       await counsellingService.choices.delete(choiceId)
+      const userId = getUserId()
+      if (userId) {
+        cache.remove(`choice_list_${userId}`)
+      }
       await loadChoices()
     } catch {
       alert('Error removing choice')
@@ -146,6 +161,10 @@ const CounsellingDashboard = () => {
     try {
       await counsellingService.choices.bulkDelete(Array.from(selectedChoiceIds))
       setSelectedChoiceIds(new Set())
+      const userId = getUserId()
+      if (userId) {
+        cache.remove(`choice_list_${userId}`)
+      }
       await loadChoices()
       alert('Selected choices removed successfully!')
     } catch (err: any) {

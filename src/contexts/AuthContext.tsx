@@ -42,11 +42,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const clearAuthCompletely = () => {
+    const userId = user?.student_user_id || (() => {
+      try {
+        const stored = localStorage.getItem('user')
+        return stored ? JSON.parse(stored).student_user_id : null
+      } catch {
+        return null
+      }
+    })()
+
     setUser(null)
     setTokens(null)
     localStorage.removeItem('tokens')
     localStorage.removeItem('user')
+    localStorage.removeItem('token')
     authService.clearTokens()
+
+    if (userId) {
+      localStorage.removeItem(`choice_list_${userId}`)
+      localStorage.removeItem(`dashboard_${userId}`)
+      localStorage.removeItem(`profile_${userId}`)
+    }
   }
 
   /* =========================

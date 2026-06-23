@@ -51,11 +51,6 @@ const SearchPage = () => {
     init()
   }, [])
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    await fetchColleges(query.trim(), location)
-  }
-
   // Helper to compile flexible regex matching on client-side
   const matchesQuery = (college: College, searchQuery: string) => {
     if (!searchQuery.trim()) return true
@@ -88,7 +83,7 @@ const SearchPage = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-gray-100">Search Colleges</h1>
 
-      <form onSubmit={handleSearch} className="mb-8">
+      <div className="mb-8">
         {/* responsive layout: vertical on small screens, horizontal on md+ */}
         <div className="flex flex-col md:flex-row gap-4">
           <input
@@ -112,21 +107,8 @@ const SearchPage = () => {
               </option>
             ))}
           </select>
-
-          <div className="flex-shrink-0">
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-blue-600 dark:bg-sky-400 text-white px-6 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-sky-500 disabled:opacity-50 flex items-center justify-center gap-2 transition-transform duration-150 ease-out active:scale-95"
-            >
-              {loading && (
-                <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              )}
-              <span>{loading ? 'Searching...' : 'Search'}</span>
-            </button>
-          </div>
         </div>
-      </form>
+      </div>
 
       {filteredColleges.length > 0 && (
         <div className="mb-8">

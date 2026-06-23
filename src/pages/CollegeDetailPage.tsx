@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { collegeService, counsellingService } from "../services/api";
+import { collegeService, counsellingService, getUserId } from "../services/api";
+import { cache } from "../utils/cache";
 import { useAuth } from "../contexts/AuthContext";
 import type { Branch } from "../types";
 
@@ -41,6 +42,10 @@ const CollegeDetailPage = () => {
   const addToChoices = async (publicId: string) => {
     try {
       await counsellingService.choices.create(publicId);
+      const userId = getUserId()
+      if (userId) {
+        cache.remove(`choice_list_${userId}`)
+      }
       setChoiceKeys((prev) => new Set(prev).add(publicId));
       alert("Added to your choices!");
     } catch (err: any) {

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { counsellingService, categoryService, clusterService } from '../services/api'
+import { counsellingService, categoryService, clusterService, getUserId } from '../services/api'
+import { cache } from '../utils/cache'
 import type { Recommendation, Category, Cluster, CounsellingChoice } from '../types'
 
 const Recommendations = () => {
@@ -371,6 +372,10 @@ const Recommendations = () => {
   const addToChoices = async (id: string) => {
     try {
       await counsellingService.choices.create(id)
+      const userId = getUserId()
+      if (userId) {
+        cache.remove(`choice_list_${userId}`)
+      }
       alert('Added to your choices!')
       // Reload choices to update the UI
       loadChoices()
@@ -487,6 +492,10 @@ const Recommendations = () => {
       }
 
       // Reload choices to update UI instantly
+      const userId = getUserId()
+      if (userId) {
+        cache.remove(`choice_list_${userId}`)
+      }
       await loadChoices()
 
     } catch (err: any) {

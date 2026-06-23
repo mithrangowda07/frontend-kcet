@@ -1,4 +1,7 @@
 import axios from 'axios'
+import { cache } from '../utils/cache'
+import { CACHE_DURATION } from '../constants/cacheDurations'
+import { jwtDecode } from 'jwt-decode'
 import type {
   Student,
   Recommendation,
@@ -116,6 +119,29 @@ function clearTokens() {
   localStorage.removeItem('user')
 }
 
+export function getUserId(): string | null {
+  try {
+    const storedUser = localStorage.getItem('user')
+    if (!storedUser) return null
+    const parsed = JSON.parse(storedUser)
+    return parsed.student_user_id || null
+  } catch {
+    return null
+  }
+}
+
+export function getJwtExpiry(): number | null {
+  try {
+    const tokens = getTokens()
+    if (!tokens?.access) return null
+    const decoded = jwtDecode<{ exp?: number }>(tokens.access)
+    return decoded.exp ? decoded.exp * 1000 : null
+  } catch (err) {
+    console.error('Error decoding JWT:', err)
+    return null
+  }
+}
+
 export const authService = {
   login: async (email: string, password: string) => {
     const response = await api.post('/auth/login/', { email_id: email, password })
@@ -197,17 +223,31 @@ export const adminStudentService = {
 
 export const collegeService = {
   list: async (): Promise<College[]> => {
+    const cached = cache.get<College[]>('college_list')
+    if (cached) return cached
+
     const response = await api.get('/colleges/')
+    cache.set('college_list', response.data, CACHE_DURATION.WEEK)
     return response.data
   },
 
   detail: async (publicId: string): Promise<College & { branches: Branch[] }> => {
+    const key = `college_${publicId}`
+    const cached = cache.get<College & { branches: Branch[] }>(key)
+    if (cached) return cached
+
     const response = await api.get(`/colleges/${publicId}/`)
+    cache.set(key, response.data, CACHE_DURATION.WEEK)
     return response.data
   },
 
   cutoff: async (publicId: string) => {
+    const key = `cutoff_${publicId}`
+    const cached = cache.get<any>(key)
+    if (cached) return cached
+
     const response = await api.get(`/colleges/${publicId}/cutoff/`)
+    cache.set(key, response.data, CACHE_DURATION.WEEK)
     return response.data
   },
 
@@ -218,12 +258,26 @@ export const collegeService = {
    * - Returns an array of colleges (frontend expects College[])
    */
   search: async (params: { query?: string; location?: string } = {}): Promise<College[]> => {
+    const queryVal = (params.query || '').trim().toLowerCase()
+    const locationVal = (params.location || '').trim().toLowerCase()
+    const key = `search_${queryVal}_${locationVal}`
+
+    const cached = cache.get<College[]>(key)
+    if (cached) return cached
+
     const res = await api.get('/search/', { params })
+    
+    let result: College[] = []
     // backend returns { colleges, branches, locations } — prefer colleges
-    if (res?.data?.colleges && Array.isArray(res.data.colleges)) return res.data.colleges as College[]
-    // fallback: if the endpoint returns an array directly
-    if (Array.isArray(res.data)) return res.data as College[]
-    return []
+    if (res?.data?.colleges && Array.isArray(res.data.colleges)) {
+      result = res.data.colleges as College[]
+    } else if (Array.isArray(res.data)) {
+      // fallback: if the endpoint returns an array directly
+      result = res.data as College[]
+    }
+
+    cache.set(key, result, CACHE_DURATION.WEEK)
+    return result
   },
 
   /**
@@ -266,18 +320,33 @@ export const collegeService = {
 
 export const branchService = {
   detail: async (publicId: string): Promise<Branch> => {
+    const key = `branch_${publicId}`
+    const cached = cache.get<Branch>(key)
+    if (cached) return cached
+
     const response = await api.get(`/branches/${publicId}/`)
+    cache.set(key, response.data, CACHE_DURATION.WEEK)
     return response.data
   },
 
   byCollegeCode: async (collegeCode: string): Promise<Branch[]> => {
+    const key = `branch_list_${collegeCode}`
+    const cached = cache.get<Branch[]>(key)
+    if (cached) return cached
+
     const response = await api.get(`/branches/by-code/${collegeCode}/`)
+    cache.set(key, response.data, CACHE_DURATION.WEEK)
     return response.data
   },
 
   cutoff: async (publicId: string, category?: string) => {
+    const key = `cutoff_branch_${publicId}${category ? `_${category}` : ''}`
+    const cached = cache.get<any>(key)
+    if (cached) return cached
+
     const params = category ? { category } : {}
     const response = await api.get(`/branches/${publicId}/cutoff/`, { params })
+    cache.set(key, response.data, CACHE_DURATION.WEEK)
     return response.data
   },
 
@@ -403,6 +472,12 @@ export const counsellingService = {
     opening_rank?: number
     closing_rank?: number
   }> => {
+    const clustersStr = Array.isArray(cluster) ? cluster.join("-") : (cluster || "all")
+    const recommendationKey = `recommendation_${kcetRank}_${category || "GM"}_${year || "2025"}_${round || "R1"}_${clustersStr}_${openingRank || 0}_${closingRank || 0}`
+    
+    const cached = cache.get<any>(recommendationKey)
+    if (cached) return cached
+
     const response = await api.post('/counselling/recommendations/', {
       kcet_rank: kcetRank,
       category,
@@ -412,12 +487,28 @@ export const counsellingService = {
       opening_rank: openingRank,
       closing_rank: closingRank,
     })
+    cache.set(recommendationKey, response.data, CACHE_DURATION.DAY)
     return response.data
   },
 
   choices: {
     list: async (): Promise<CounsellingChoice[]> => {
+      const userId = getUserId()
+      const key = userId ? `choice_list_${userId}` : ''
+      if (key) {
+        const cached = cache.get<CounsellingChoice[]>(key)
+        if (cached) return cached
+      }
+
       const response = await api.get('/counselling/choices/')
+      
+      if (key) {
+        const expiry = getJwtExpiry()
+        const ttl = expiry ? expiry - Date.now() : null
+        if (ttl === null || ttl > 0) {
+          cache.set(key, response.data, ttl)
+        }
+      }
       return response.data
     },
 
@@ -573,8 +664,13 @@ export const meetingService = {
 
 export const categoryService = {
   list: async (): Promise<Category[]> => {
+    const key = 'categories'
+    const cached = cache.get<Category[]>(key)
+    if (cached) return cached
+
     try {
       const response = await api.get('/colleges/categories/')
+      cache.set(key, response.data, CACHE_DURATION.MONTH)
       return response.data
     } catch (error) {
       // Fallback to hardcoded categories if API fails
@@ -587,8 +683,13 @@ export const categoryService = {
 
 export const clusterService = {
   list: async (): Promise<Cluster[]> => {
+    const key = 'cluster_list'
+    const cached = cache.get<Cluster[]>(key)
+    if (cached) return cached
+
     try {
       const response = await api.get('/colleges/clusters/')
+      cache.set(key, response.data, CACHE_DURATION.MONTH)
       return response.data
     } catch (error) {
       console.warn('Failed to load clusters from API')
