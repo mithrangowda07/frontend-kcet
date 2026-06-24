@@ -1,12 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  branchService,
-  collegeService,
-  categoryService,
-} from "../services/api";
-import type { Branch, College, Category } from "../types";
+import { authService } from "../services/api";
 
 const LoginRegister = () => {
   const [searchParams] = useSearchParams();
@@ -52,15 +47,136 @@ const LoginRegister = () => {
     usn: "",
   });
 
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [colleges, setColleges] = useState<College[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [emailError, setEmailError] = useState("");
   const submitRef = useRef(false);
+
+  // Forgot Password States
+  const [view, setView] = useState<'login' | 'forgot_email' | 'forgot_otp' | 'forgot_reset'>('login');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [forgotToken, setForgotToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  const handleForgotPasswordRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    try {
+      const email = forgotEmail.trim();
+      if (!email) {
+        setError('Email address is required.');
+        setLoading(false);
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setError('Please enter a valid email address.');
+        setLoading(false);
+        return;
+      }
+
+      await authService.sendOtp(email, 'forgot_password');
+      setView('forgot_otp');
+      setResendCooldown(60);
+      setSuccessMessage('OTP sent successfully.');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to send OTP.';
+      setError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyForgotPasswordOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    try {
+      const email = forgotEmail.trim();
+      if (!otp.trim()) {
+        setError('OTP is required.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await authService.verifyOtp(email, otp.trim(), 'forgot_password');
+      if (response.tempToken) {
+        setForgotToken(response.tempToken);
+        setView('forgot_reset');
+        setOtp('');
+      } else {
+        setError('Verification failed. No token received.');
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || err.response?.data?.message || 'Invalid OTP.';
+      setError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    try {
+      if (!newPassword || !newPasswordConfirm) {
+        setError('Password fields are required.');
+        setLoading(false);
+        return;
+      }
+      if (newPassword !== newPasswordConfirm) {
+        setError('Passwords do not match.');
+        setLoading(false);
+        return;
+      }
+
+      const { strength } = getPasswordStrength(newPassword);
+      if (strength < 5) {
+        setError('Password does not satisfy the strong password policy.');
+        setLoading(false);
+        return;
+      }
+
+      if (!forgotToken) {
+        setError('Verification token is missing. Please restart password recovery.');
+        setLoading(false);
+        return;
+      }
+
+      await authService.resetPassword(forgotEmail.trim(), newPassword, newPasswordConfirm, forgotToken);
+      setSuccessMessage('Password reset successful. Please login with your new password.');
+      setView('login');
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setForgotEmail('');
+      setForgotToken('');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to reset password.';
+      setError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const isValidEmail = (email: string) => {
     const emailRegex =
@@ -84,89 +200,7 @@ const LoginRegister = () => {
     }
   };
 
-  // College change handler (for <select>)
-  const handleCollegeCodeChange = async (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const collegeCode = e.target.value;
-    setFormData((prev) => ({ ...prev, college_code: collegeCode }));
-    setError("");
 
-    if (!collegeCode) {
-      setBranches([]);
-      setFormData((prev) => ({ ...prev, unique_key: "" }));
-      return;
-    }
-
-    try {
-      const branchList = await branchService.byCollegeCode(collegeCode);
-      setBranches(branchList);
-      setFormData((prev) => ({
-        ...prev,
-        unique_key: branchList.some(
-          (branch) => branch.unique_key === prev.unique_key
-        )
-          ? prev.unique_key
-          : "",
-      }));
-    } catch (err) {
-      console.error("Error fetching branches:", err);
-      setBranches([]);
-      setFormData((prev) => ({ ...prev, unique_key: "" }));
-    }
-  };
-
-  // Load colleges when Studying form is visible (and also if returning to this tab)
-  useEffect(() => {
-    if (!isLogin && studentType === "studying") {
-      collegeService
-        .list()
-        .then((collegeList) => {
-          setColleges(collegeList);
-          
-          // Old verification flow removed - redirect to new registration
-          navigate("/register/studying");
-          return;
-        })
-        .catch(() => setColleges([]));
-    }
-  }, [isLogin, studentType]);
-  
-  // Old verification flow removed - registration now handled by dedicated pages
-
-  // Load categories when registration view is open (for both student types)
-  useEffect(() => {
-    if (!isLogin) {
-      categoryService
-        .list()
-        .then((data) => {
-          setCategories(Array.isArray(data) ? data : []);
-        })
-        .catch(async (err) => {
-          console.error("Error loading categories, using fallback:", err);
-          // Fallback to hardcoded categories
-          try {
-            const { HARDCODED_CATEGORIES } = await import("../data/categories");
-            setCategories(HARDCODED_CATEGORIES);
-          } catch {
-            setCategories([]);
-          }
-        });
-    }
-  }, [isLogin]);
-
-  // If a college is already selected (e.g., user toggled tabs), ensure branches are loaded
-  useEffect(() => {
-    if (!isLogin && studentType === "studying" && formData.college_code) {
-      branchService
-        .byCollegeCode(formData.college_code)
-        .then(setBranches)
-        .catch(() => setBranches([]));
-    } else if (studentType !== "studying") {
-      setBranches([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLogin, studentType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -291,13 +325,24 @@ setIsLogin(true);
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#111827] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-slate-800 p-8 rounded-lg shadow-lg border border-slate-300 dark:border-slate-700">
+        
+        {/* Header */}
         <div>
           <h2 className="text-center text-3xl font-extrabold text-slate-800 dark:text-gray-100">
-            {isLogin ? "Sign in to your account" : "Create a new account"}
+            {view === 'login' && (isLogin ? "Sign in to your account" : "Create a new account")}
+            {view === 'forgot_email' && "Reset Password"}
+            {view === 'forgot_otp' && "Verify OTP"}
+            {view === 'forgot_reset' && "Set New Password"}
           </h2>
+          <p className="mt-2 text-center text-sm text-slate-600 dark:text-gray-400">
+            {view === 'forgot_email' && "Enter your email address to receive a verification OTP."}
+            {view === 'forgot_otp' && `Enter the 6-digit code sent to ${forgotEmail}`}
+            {view === 'forgot_reset' && "Choose a strong new password for your account."}
+          </p>
         </div>
 
-        {!isLogin && (
+        {/* Tab Selection (only in Login mode if we support switching, though registering redirects) */}
+        {view === 'login' && !isLogin && (
           <div className="flex space-x-4">
             <button
               type="button"
@@ -313,7 +358,6 @@ setIsLogin(true);
             <button
               type="button"
               onClick={() => {
-                // Redirect to new registration flow
                 navigate("/register/studying");
               }}
               className={`flex-1 py-2 px-4 rounded-md ${
@@ -327,76 +371,23 @@ setIsLogin(true);
           </div>
         )}
 
+        {/* Notifications */}
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded whitespace-pre-line">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded whitespace-pre-line text-sm">
             <strong>Error:</strong>
             <div className="mt-1">{error}</div>
           </div>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {!isLogin && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                  Name
-                  {studentType === "studying" && (
-                    <span className="ml-2 text-xs text-slate-500 dark:text-gray-400">
-                      (Verified - Cannot be changed)
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  disabled={studentType === "studying"}
-                  className={`mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 text-slate-800 dark:text-gray-200 ${
-                    studentType === "studying"
-                      ? "bg-slate-100 dark:bg-slate-900 cursor-not-allowed opacity-75"
-                      : "bg-white dark:bg-slate-700"
-                  }`}
-                />
-              </div>
+        {successMessage && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-400 dark:border-emerald-600 text-emerald-800 dark:text-emerald-300 px-4 py-3 rounded text-sm">
+            {successMessage}
+          </div>
+        )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email_id"
-                  required
-                  value={formData.email_id}
-                  onChange={handleInputChange}
-                  className={`mt-1 block w-full px-3 py-2 border ${emailError ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200`}
-                />
-                {emailError && (
-                  <div className="mt-1 text-red-600 dark:text-red-400 text-sm">
-                    {emailError}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  name="phone_number"
-                  required
-                  value={formData.phone_number}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                />
-              </div>
-            </>
-          )}
-
-          {isLogin && (
+        {/* View Controller */}
+        {view === 'login' && (
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
                 Email
@@ -415,327 +406,243 @@ setIsLogin(true);
                 </div>
               )}
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-              Password
-            </label>
-            <div className="mt-1 relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                required
-                value={formData.password}
-                onChange={handleInputChange}
-                className="block w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-              />
+            <div>
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView('forgot_email');
+                    setError('');
+                    setSuccessMessage('');
+                  }}
+                  className="text-xs text-blue-600 dark:text-sky-400 hover:underline font-medium"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <div className="mt-1 relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  required
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="block w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300"
+                >
+                  {showPassword ? (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div>
               <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300"
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 dark:bg-sky-400 hover:bg-blue-700 dark:hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-sky-400 disabled:opacity-50"
               >
-                {showPassword ? (
-                  <svg
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    />
-                  </svg>
-                )}
+                {loading ? "Processing..." : "Sign in"}
               </button>
             </div>
-            {!isLogin && formData.password && (
-              <PasswordStrengthIndicator password={formData.password} />
-            )}
-          </div>
 
-          {!isLogin && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                  Confirm Password
-                </label>
-                <div className="mt-1 relative">
-                  <input
-                    type={showPasswordConfirm ? "text" : "password"}
-                    name="password_confirm"
-                    required
-                    value={formData.password_confirm}
-                    onChange={handleInputChange}
-                    className="block w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300"
-                  >
-                    {showPasswordConfirm ? (
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  navigate("/register");
+                }}
+                className="text-blue-600 dark:text-sky-400 hover:text-blue-500 dark:hover:text-sky-300 text-sm"
+              >
+                Don't have an account? Register
+              </button>
+            </div>
+          </form>
+        )}
+
+        {view === 'forgot_email' && (
+          <form className="space-y-6" onSubmit={handleForgotPasswordRequest}>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+                placeholder="Enter your registered email"
+              />
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setView('login');
+                  setError('');
+                }}
+                className="flex-1 py-2 px-4 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-750 focus:outline-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !forgotEmail}
+                className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 dark:bg-sky-400 hover:bg-blue-700 dark:hover:bg-sky-500 focus:outline-none disabled:opacity-50"
+              >
+                {loading ? "Sending..." : "Send OTP"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {view === 'forgot_otp' && (
+          <form className="space-y-6" onSubmit={handleVerifyForgotPasswordOtp}>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                Enter 6-Digit OTP
+              </label>
+              <input
+                type="text"
+                required
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                maxLength={6}
+                className="mt-1 block w-full text-center tracking-[0.5em] font-mono text-lg px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+                placeholder="------"
+              />
+            </div>
+
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500 dark:text-gray-400">Didn't receive code?</span>
+              <button
+                type="button"
+                disabled={resendCooldown > 0 || loading}
+                onClick={handleForgotPasswordRequest}
+                className="text-blue-600 dark:text-sky-400 hover:underline font-semibold disabled:opacity-50"
+              >
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+              </button>
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setView('forgot_email');
+                  setError('');
+                }}
+                className="flex-1 py-2 px-4 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-750 focus:outline-none"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={loading || otp.length !== 6}
+                className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 focus:outline-none disabled:opacity-50"
+              >
+                {loading ? "Verifying..." : "Verify OTP"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {view === 'forgot_reset' && (
+          <form className="space-y-6" onSubmit={handleResetPasswordSubmit}>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                New Password
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="block w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+                  placeholder="Enter strong password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-gray-500 hover:text-slate-600"
+                >
+                  {showPassword ? (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
               </div>
-
-              {studentType === "counselling" && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      Category
-                    </label>
-                    <select
-                      name="category"
-                      required
-                      value={formData.category}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                    >
-                      <option value="">Select Category</option>
-                      {categories.map((cat) => (
-                        <option key={cat.category} value={cat.category}>
-                          {cat.category}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      KCET Rank
-                    </label>
-                    <input
-                      type="number"
-                      name="kcet_rank"
-                      required
-                      value={formData.kcet_rank}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                    />
-                  </div>
-                </>
+              {newPassword.length > 0 && (
+                <PasswordStrengthIndicator password={newPassword} />
               )}
+            </div>
 
-              {studentType === "studying" && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      USN / Student ID
-                      <span className="ml-2 text-xs text-slate-500 dark:text-gray-400">
-                        (Verified - Cannot be changed)
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      name="usn"
-                      required
-                      value={formData.usn}
-                      onChange={handleInputChange}
-                      disabled={true}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-gray-200 cursor-not-allowed opacity-75"
-                      placeholder="Enter your USN/Student ID"
-                    />
-                    <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
-                      Pre-filled from verification - cannot be changed
-                    </p>
-                  </div>
-                  
-                  <div>
-                    {" "}
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      Category
-                    </label>{" "}
-                    <select
-                      name="category"
-                      required
-                      value={formData.category}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                    >
-                      {" "}
-                      <option value="">Select Category</option>{" "}
-                      {categories.map((cat) => (
-                        <option key={cat.category} value={cat.category}>
-                          {" "}
-                          {cat.category}{" "}
-                        </option>
-                      ))}{" "}
-                    </select>{" "}
-                  </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                Confirm Password
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  type={showPasswordConfirm ? "text" : "password"}
+                  required
+                  value={newPasswordConfirm}
+                  onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                  className="block w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
+                  placeholder="Confirm password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-gray-500 hover:text-slate-600"
+                >
+                  {showPasswordConfirm ? (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
 
-                  {/* College dropdown (replaces text input) */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      College
-                      <span className="ml-2 text-xs text-slate-500 dark:text-gray-400">
-                        (Verified - Cannot be changed)
-                      </span>
-                    </label>
-                    <select
-                      name="college_code"
-                      required
-                      value={formData.college_code}
-                      onChange={handleCollegeCodeChange}
-                      disabled={true}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-gray-200 cursor-not-allowed opacity-75"
-                    >
-                      <option value="">Select a college</option>
-                      {colleges.map((c) => (
-                        <option key={c.public_id || c.college_code} value={c.college_code}>
-                          {c.college_name} ({c.college_code})
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
-                      Pre-filled from verification - cannot be changed
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      Branch
-                    </label>
-                    <select
-                      name="unique_key"
-                      required
-                      value={formData.unique_key}
-                      onChange={handleInputChange}
-                      disabled={!formData.college_code}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 disabled:bg-slate-100 dark:disabled:bg-slate-800 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                    >
-                      <option value="">Select a branch</option>
-                      {branches.map((branch) => (
-                        <option
-                          key={branch.unique_key}
-                          value={branch.unique_key}
-                        >
-                          {branch.branch_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
-                      Year of Starting
-                    </label>
-                    <input
-                      type="number"
-                      name="year_of_starting"
-                      required
-                      value={formData.year_of_starting}
-                      onChange={handleInputChange}
-                      min="2020"
-                      max={new Date().getFullYear()}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
-                    />
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          <div>
             <button
               type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 dark:bg-sky-400 hover:bg-blue-700 dark:hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-sky-400 disabled:opacity-50"
+              disabled={loading || newPassword !== newPasswordConfirm || getPasswordStrength(newPassword).strength < 5}
+              className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 focus:outline-none disabled:opacity-50"
             >
-              {loading ? "Processing..." : isLogin ? "Sign in" : "Register"}
+              {loading ? "Resetting..." : "Reset Password"}
             </button>
-          </div>
-
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => {
-                if (isLogin) {
-                  navigate("/register");
-                } else {
-                  setIsLogin(true);
-                  setError("");
-                  setEmailError("");
-                  setBranches([]);
-                  setColleges([]);
-                  setFormData({
-                    name: "",
-                    email_id: "",
-                    phone_number: "",
-                    password: "",
-                    password_confirm: "",
-                    category: "",
-                    kcet_rank: "",
-                    college_code: "",
-                    unique_key: "",
-                    year_of_starting: "",
-                    usn: "",
-                  });
-                }
-              }}
-              className="text-blue-600 dark:text-sky-400 hover:text-blue-500 dark:hover:text-sky-300"
-            >
-              {isLogin
-                ? "Don't have an account? Register"
-                : "Already have an account? Sign in"}
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );

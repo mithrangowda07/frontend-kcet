@@ -163,6 +163,26 @@ export const authService = {
     return response.data
   },
 
+  sendOtp: async (email: string, purpose: 'registration' | 'forgot_password' | 'change_password') => {
+    const response = await api.post('/auth/send-otp/', { email, purpose })
+    return response.data
+  },
+
+  verifyOtp: async (email: string, otp: string, purpose: 'registration' | 'forgot_password' | 'change_password') => {
+    const response = await api.post('/auth/verify-otp/', { email, otp, purpose })
+    return response.data
+  },
+
+  resetPassword: async (email: string, password: string, passwordConfirm: string, token: string) => {
+    const response = await api.post('/auth/reset-password/', { email, password, passwordConfirm, token })
+    return response.data
+  },
+
+  changePassword: async (password: string, passwordConfirm: string, token: string) => {
+    const response = await api.post('/auth/change-password/', { password, passwordConfirm, token })
+    return response.data
+  },
+
   me: async (): Promise<Student> => {
     const response = await api.get('/auth/me/')
     return response.data
