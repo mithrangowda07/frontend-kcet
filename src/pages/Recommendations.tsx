@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { counsellingService, categoryService, clusterService, getUserId } from '../services/api'
+import { counsellingService, categoryService, clusterService, collegeService, getUserId } from '../services/api'
 import { cache } from '../utils/cache'
 import type { Recommendation, Category, Cluster, CounsellingChoice } from '../types'
 
@@ -19,6 +19,14 @@ const Recommendations = () => {
   const [selectedClusters, setSelectedClusters] = useState<string[]>(['all'])
   const [isClusterDropdownOpen, setIsClusterDropdownOpen] = useState(false)
   const clusterDropdownRef = useRef<HTMLDivElement>(null)
+  const mobileClusterDropdownRef = useRef<HTMLDivElement>(null)
+
+  const [locations, setLocations] = useState<string[]>([])
+  const [selectedLocations, setSelectedLocations] = useState<string[]>(['all'])
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false)
+  const [locationSearch, setLocationSearch] = useState('')
+  const locationDropdownRef = useRef<HTMLDivElement>(null)
+  const mobileLocationDropdownRef = useRef<HTMLDivElement>(null)
 
   const [year, setYear] = useState('2025')
   const [round, setRound] = useState('R1')
@@ -61,11 +69,24 @@ const Recommendations = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Ref-based outside click handler for Cluster Dropdown
+  // Ref-based outside click handler for Cluster and Location Dropdowns (Desktop & Mobile)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (clusterDropdownRef.current && !clusterDropdownRef.current.contains(event.target as Node)) {
+      const clickedOutsideCluster =
+        (!clusterDropdownRef.current || !clusterDropdownRef.current.contains(event.target as Node)) &&
+        (!mobileClusterDropdownRef.current || !mobileClusterDropdownRef.current.contains(event.target as Node));
+      
+      if (clickedOutsideCluster) {
         setIsClusterDropdownOpen(false)
+      }
+
+      const clickedOutsideLocation =
+        (!locationDropdownRef.current || !locationDropdownRef.current.contains(event.target as Node)) &&
+        (!mobileLocationDropdownRef.current || !mobileLocationDropdownRef.current.contains(event.target as Node));
+      
+      if (clickedOutsideLocation) {
+        setIsLocationDropdownOpen(false)
+        setLocationSearch('')
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -113,6 +134,14 @@ const Recommendations = () => {
     }
   }
 
+  const loadLocations = async () => {
+    try {
+      setLocations(await collegeService.getLocations())
+    } catch {
+      setLocations([])
+    }
+  }
+
   const loadChoices = async () => {
     try {
       const data = await counsellingService.choices.list()
@@ -126,6 +155,7 @@ const Recommendations = () => {
   useEffect(() => {
     loadCategories()
     loadClusters()
+    loadLocations()
     loadChoices()
 
     setCategory(user?.category || 'GM')
@@ -161,7 +191,7 @@ const Recommendations = () => {
   }, [user])
 
   /* ---------------- Fetch Recommendations ---------------- */
-  const loadRecommendations = async () => {
+  const loadRecommendations = async (bypassCache = false) => {
     if (!user?.kcet_rank) return alert('Please set your KCET rank first')
     if (openingRank <= 0 || closingRank <= 0) {
       return alert('Ranks must be positive numbers')
@@ -179,7 +209,9 @@ const Recommendations = () => {
         round,
         selectedClusters.includes('all') || selectedClusters.length === 0 ? undefined : selectedClusters,
         openingRank,
-        closingRank
+        closingRank,
+        selectedLocations.includes('all') || selectedLocations.length === 0 ? undefined : selectedLocations,
+        bypassCache
       )
       setRecommendations(data.recommendations)
       if (data.closing_rank && data.closing_rank !== closingRank) {
@@ -231,11 +263,51 @@ const Recommendations = () => {
     }
   }
 
+  const handleToggleLocation = (loc: string) => {
+    const allLocs = locations
+
+    if (loc === 'all') {
+      if (selectedLocations.includes('all')) {
+        setSelectedLocations([])
+      } else {
+        setSelectedLocations(['all'])
+      }
+      return
+    }
+
+    let next: string[]
+    if (selectedLocations.includes('all')) {
+      next = allLocs.filter(l => l !== loc)
+    } else {
+      if (selectedLocations.includes(loc)) {
+        next = selectedLocations.filter(l => l !== loc)
+      } else {
+        next = [...selectedLocations, loc]
+      }
+    }
+
+    const containsAllIndividual = allLocs.every(l => next.includes(l))
+    if (containsAllIndividual && allLocs.length > 0) {
+      setSelectedLocations(['all'])
+    } else {
+      setSelectedLocations(next)
+    }
+  }
+
+  const handleRemoveLocation = (loc: string) => {
+    if (loc === 'all') {
+      setSelectedLocations([])
+    } else {
+      setSelectedLocations(prev => prev.filter(l => l !== loc))
+    }
+  }
+
   const handleResetFilters = () => {
     setCategory(user?.category || 'GM')
     setYear('2025')
     setRound('R1')
     setSelectedClusters(['all'])
+    setSelectedLocations(['all'])
     if (user?.kcet_rank) {
       const rank = user.kcet_rank
       let open = 0
@@ -266,8 +338,9 @@ const Recommendations = () => {
 
   const renderClusterDropdown = (isMobile: boolean = false) => {
     const minHeightClass = isMobile ? 'min-h-[48px]' : 'min-h-[40px]'
+    const ref = isMobile ? mobileClusterDropdownRef : clusterDropdownRef
     return (
-      <div ref={clusterDropdownRef} className="relative w-full md:w-64">
+      <div ref={ref} className="relative w-full md:w-64">
         <div
           onClick={() => setIsClusterDropdownOpen(!isClusterDropdownOpen)}
           className={`flex items-center justify-between px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm ${minHeightClass}`}
@@ -319,7 +392,7 @@ const Recommendations = () => {
         </div>
 
         {isClusterDropdownOpen && (
-          <div className="absolute left-0 mt-1 w-full max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1">
+          <div className="cluster-dropdown-menu py-1">
             {/* Option: All Clusters */}
             <label className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer select-none">
               <input
@@ -354,6 +427,120 @@ const Recommendations = () => {
                 </label>
               )
             })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderLocationDropdown = (isMobile: boolean = false) => {
+    const minHeightClass = isMobile ? 'min-h-[48px]' : 'min-h-[40px]'
+    const filteredLocs = locations.filter(loc =>
+      loc.toLowerCase().includes(locationSearch.toLowerCase())
+    )
+    const ref = isMobile ? mobileLocationDropdownRef : locationDropdownRef
+
+    return (
+      <div ref={ref} className="relative w-full md:w-64">
+        <div
+          onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
+          className={`flex items-center justify-between px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm ${minHeightClass}`}
+        >
+          <div className="flex flex-wrap gap-1.5 items-center mr-2">
+            {selectedLocations.length === 0 ? (
+              <span className="text-slate-400 dark:text-slate-400 text-sm">Select Locations</span>
+            ) : selectedLocations.includes('all') ? (
+              <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300 px-2 py-0.5 rounded-full text-xs font-semibold">
+                All Locations
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleRemoveLocation('all')
+                  }}
+                  className="hover:text-red-500 font-bold ml-1 focus:outline-none"
+                >
+                  ✕
+                </button>
+              </span>
+            ) : (
+              selectedLocations.map((loc) => (
+                <span
+                  key={loc}
+                  className="inline-flex items-center gap-1 bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300 px-2 py-0.5 rounded-full text-xs font-semibold"
+                >
+                  {loc}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRemoveLocation(loc)
+                    }}
+                    className="hover:text-red-500 font-bold ml-1 focus:outline-none"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+          <span className="text-slate-400 dark:text-slate-500 text-xs ml-auto">
+            {isLocationDropdownOpen ? '▲' : '▼'}
+          </span>
+        </div>
+
+        {isLocationDropdownOpen && (
+          <div className="cluster-dropdown-menu py-1">
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+              <input
+                type="text"
+                value={locationSearch}
+                onChange={(e) => setLocationSearch(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Search locations..."
+                className="w-full px-2.5 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {locationSearch === '' && (
+              <label className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={selectedLocations.includes('all')}
+                  onChange={() => handleToggleLocation('all')}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer mr-2.5"
+                />
+                <span className="text-xs sm:text-sm text-slate-800 dark:text-gray-200 font-semibold">
+                  All Locations
+                </span>
+              </label>
+            )}
+
+            {filteredLocs.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                No locations found
+              </div>
+            ) : (
+              filteredLocs.map((loc) => {
+                const isChecked = selectedLocations.includes(loc) || selectedLocations.includes('all')
+                return (
+                  <label
+                    key={loc}
+                    className="flex items-center px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggleLocation(loc)}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 bg-white dark:bg-slate-700 dark:border-slate-600 cursor-pointer mr-2.5"
+                    />
+                    <span className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 font-medium">
+                      {loc}
+                    </span>
+                  </label>
+                )
+              })
+            )}
           </div>
         )}
       </div>
@@ -518,10 +705,11 @@ const Recommendations = () => {
     if (year) count++
     if (round) count++
     if (selectedClusters.length > 0 && !selectedClusters.includes('all')) count++
+    if (selectedLocations.length > 0 && !selectedLocations.includes('all')) count++
     if (openingRank > 0) count++
     if (closingRank > 0) count++
     return count
-  }, [category, year, round, selectedClusters, openingRank, closingRank])
+  }, [category, year, round, selectedClusters, selectedLocations, openingRank, closingRank])
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
@@ -557,7 +745,7 @@ const Recommendations = () => {
         
         {/* -------- Filters & Actions -------- */}
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end justify-between mb-6 bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3">
-          <div className="flex flex-nowrap gap-4 items-end overflow-x-auto pb-2 lg:pb-0">
+          <div className="flex flex-wrap gap-4 items-end pb-2 lg:pb-0">
             <Filter label="Category">
               <select value={category} onChange={e => setCategory(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
                 <option value="">All</option>
@@ -586,6 +774,10 @@ const Recommendations = () => {
             <Filter label="Cluster">
               {renderClusterDropdown(false)}
             </Filter>
+
+            <Filter label="Location">
+              {renderLocationDropdown(false)}
+            </Filter>
                 
             <Filter label="Opening Rank">
               <input
@@ -608,7 +800,7 @@ const Recommendations = () => {
 
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mt-3 lg:mt-0">
             <button
-              onClick={loadRecommendations}
+              onClick={() => loadRecommendations(true)}
               disabled={loading || bulkAdding}
               className="bg-blue-600 dark:bg-sky-400 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 dark:hover:bg-sky-500 transition disabled:opacity-50 min-h-[40px] sm:min-h-0 flex items-center justify-center font-medium"
             >
@@ -801,6 +993,11 @@ const Recommendations = () => {
                 <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Cluster</label>
                 {renderClusterDropdown(true)}
               </div>
+
+              <div className="flex flex-col gap-1 col-span-2">
+                <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Location</label>
+                {renderLocationDropdown(true)}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -849,7 +1046,7 @@ const Recommendations = () => {
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={loadRecommendations}
+              onClick={() => loadRecommendations(true)}
               disabled={loading || bulkAdding}
               className="w-full min-h-[48px] bg-slate-600 hover:bg-slate-700 dark:bg-slate-805 dark:hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50 flex items-center justify-center"
             >

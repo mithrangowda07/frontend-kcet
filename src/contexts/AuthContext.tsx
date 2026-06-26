@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { authService } from '../services/api'
 import { Student } from '../types'
+import { cache } from '../utils/cache'
 
 interface AuthContextType {
   user: Student | null
@@ -59,9 +60,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authService.clearTokens()
 
     if (userId) {
-      localStorage.removeItem(`choice_list_${userId}`)
-      localStorage.removeItem(`dashboard_${userId}`)
-      localStorage.removeItem(`profile_${userId}`)
+      cache.remove(`choice_list_${userId}`)
+      cache.remove(`dashboard_${userId}`)
+      cache.remove(`profile_${userId}`)
     }
   }
 

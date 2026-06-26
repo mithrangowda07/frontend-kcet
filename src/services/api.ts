@@ -485,7 +485,9 @@ export const counsellingService = {
     round?: string,
     cluster?: string | string[],
     openingRank?: number,
-    closingRank?: number
+    closingRank?: number,
+    locations?: string[],
+    bypassCache?: boolean
   ): Promise<{
     recommendations: Recommendation[]
     count: number
@@ -493,21 +495,25 @@ export const counsellingService = {
     closing_rank?: number
   }> => {
     const clustersStr = Array.isArray(cluster) ? cluster.join("-") : (cluster || "all")
-    const recommendationKey = `recommendation_${kcetRank}_${category || "GM"}_${year || "2025"}_${round || "R1"}_${clustersStr}_${openingRank || 0}_${closingRank || 0}`
+    const locationsStr = Array.isArray(locations) ? locations.join("-") : (locations || "all")
+    const recommendationKey = `recommendation_v2_${kcetRank}_${category || "GM"}_${year || "2025"}_${round || "R1"}_${clustersStr}_${locationsStr}_${openingRank || 0}_${closingRank || 0}`
     
-    const cached = cache.get<any>(recommendationKey)
-    if (cached) return cached
+    if (!bypassCache) {
+      const cached = cache.get<any>(recommendationKey)
+      if (cached) return cached
+    }
 
     const response = await api.post('/counselling/recommendations/', {
       kcet_rank: kcetRank,
       category,
       year: year || '2025',
       round: round || 'R1',
-      cluster,
+      clusters: cluster,
+      locations: locations,
       opening_rank: openingRank,
       closing_rank: closingRank,
     })
-    cache.set(recommendationKey, response.data, CACHE_DURATION.DAY)
+    cache.set(recommendationKey, response.data, CACHE_DURATION.SIX_HOURS)
     return response.data
   },
 
