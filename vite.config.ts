@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000/api',
+        target: 'https://kcetapi.duckdns.org/api',
         changeOrigin: true,
       },
     },
