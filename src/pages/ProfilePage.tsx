@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { authService, categoryService, collegeService, branchService } from '../services/api'
 import type { Category, College, Branch } from '../types'
+import { isValidKcetRank } from '../utils/validation'
 
 const ProfilePage = () => {
   const { user } = useAuth()
@@ -213,10 +214,16 @@ const ProfilePage = () => {
       }
 
       if (isCounselling) {
-        updateData.kcet_rank =
-          formData.kcet_rank !== '' && formData.kcet_rank != null
-            ? parseInt(formData.kcet_rank, 10)
-            : null
+        if (formData.kcet_rank !== '' && formData.kcet_rank != null) {
+          if (!isValidKcetRank(formData.kcet_rank)) {
+            setError('KCET rank must be between 1 and 400,000.')
+            setLoading(false)
+            return
+          }
+          updateData.kcet_rank = parseInt(formData.kcet_rank, 10)
+        } else {
+          updateData.kcet_rank = null
+        }
       }
 
       if (isStudying) {
@@ -334,6 +341,8 @@ const ProfilePage = () => {
                 name="kcet_rank"
                 value={formData.kcet_rank}
                 onChange={handleInputChange}
+                min={1}
+                max={400000}
                 className="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 dark:focus:ring-sky-400 focus:border-blue-500 dark:focus:border-sky-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
               />
             </div>

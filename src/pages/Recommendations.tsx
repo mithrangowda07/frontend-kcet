@@ -31,8 +31,8 @@ const Recommendations = () => {
   const [year, setYear] = useState('2025')
   const [round, setRound] = useState('R1')
 
-  const [openingRank, setOpeningRank] = useState(0)
-  const [closingRank, setClosingRank] = useState(0)
+  const [openingRank, setOpeningRank] = useState<number | ''>('')
+  const [closingRank, setClosingRank] = useState<number | ''>('')
   const [hasInitialLoaded, setHasInitialLoaded] = useState(false)
 
   // Mobile collapsed filter state
@@ -193,10 +193,10 @@ const Recommendations = () => {
   /* ---------------- Fetch Recommendations ---------------- */
   const loadRecommendations = async (bypassCache = false) => {
     if (!user?.kcet_rank) return alert('Please set your KCET rank first')
-    if (openingRank <= 0 || closingRank <= 0) {
+    if (openingRank === '' || closingRank === '' || Number(openingRank) <= 0 || Number(closingRank) <= 0) {
       return alert('Ranks must be positive numbers')
     }
-    if (openingRank >= closingRank) {
+    if (Number(openingRank) >= Number(closingRank)) {
       return alert('Opening rank must be less than closing rank')
     }
 
@@ -208,8 +208,8 @@ const Recommendations = () => {
         year,
         round,
         selectedClusters.includes('all') || selectedClusters.length === 0 ? undefined : selectedClusters,
-        openingRank,
-        closingRank,
+        Number(openingRank),
+        Number(closingRank),
         selectedLocations.includes('all') || selectedLocations.length === 0 ? undefined : selectedLocations,
         bypassCache
       )
@@ -549,7 +549,7 @@ const Recommendations = () => {
 
   /* ---------------- Initial Load Trigger ---------------- */
   useEffect(() => {
-    if (user?.kcet_rank && openingRank > 0 && closingRank > 0 && !hasInitialLoaded) {
+    if (user?.kcet_rank && openingRank !== '' && closingRank !== '' && Number(openingRank) > 0 && Number(closingRank) > 0 && !hasInitialLoaded) {
       loadRecommendations()
       setHasInitialLoaded(true)
     }
@@ -706,8 +706,8 @@ const Recommendations = () => {
     if (round) count++
     if (selectedClusters.length > 0 && !selectedClusters.includes('all')) count++
     if (selectedLocations.length > 0 && !selectedLocations.includes('all')) count++
-    if (openingRank > 0) count++
-    if (closingRank > 0) count++
+    if (openingRank !== '' && Number(openingRank) > 0) count++
+    if (closingRank !== '' && Number(closingRank) > 0) count++
     return count
   }, [category, year, round, selectedClusters, selectedLocations, openingRank, closingRank])
 
@@ -783,7 +783,19 @@ const Recommendations = () => {
               <input
                 type="number"
                 value={openingRank}
-                onChange={e => setOpeningRank(+e.target.value)}
+                onChange={e => {
+                  let val = e.target.value.replace(/^0+/, '');
+                  if (val === '') {
+                    setOpeningRank('');
+                  } else {
+                    let num = parseInt(val, 10);
+                    if (num > 200000) {
+                      num = 200000;
+                      showToast('Opening rank cannot exceed 2,00,000', 'error');
+                    }
+                    setOpeningRank(num);
+                  }
+                }}
                 className="pr-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
               />
             </Filter>
@@ -792,7 +804,19 @@ const Recommendations = () => {
               <input
                 type="number"
                 value={closingRank}
-                onChange={e => setClosingRank(+e.target.value)}
+                onChange={e => {
+                  let val = e.target.value.replace(/^0+/, '');
+                  if (val === '') {
+                    setClosingRank('');
+                  } else {
+                    let num = parseInt(val, 10);
+                    if (num > 300000) {
+                      num = 300000;
+                      showToast('Closing rank cannot exceed 3,00,000', 'error');
+                    }
+                    setClosingRank(num);
+                  }
+                }}
                 className="pr-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200"
               />
             </Filter>
@@ -1006,7 +1030,19 @@ const Recommendations = () => {
                 <input
                   type="number"
                   value={openingRank}
-                  onChange={(e) => setOpeningRank(+e.target.value)}
+                  onChange={e => {
+                    let val = e.target.value.replace(/^0+/, '');
+                    if (val === '') {
+                      setOpeningRank('');
+                    } else {
+                      let num = parseInt(val, 10);
+                      if (num > 200000) {
+                        num = 200000;
+                        showToast('Opening rank cannot exceed 2,00,000', 'error');
+                      }
+                      setOpeningRank(num);
+                    }
+                  }}
                   className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
                 />
               </div>
@@ -1016,7 +1052,19 @@ const Recommendations = () => {
                 <input
                   type="number"
                   value={closingRank}
-                  onChange={(e) => setClosingRank(+e.target.value)}
+                  onChange={e => {
+                    let val = e.target.value.replace(/^0+/, '');
+                    if (val === '') {
+                      setClosingRank('');
+                    } else {
+                      let num = parseInt(val, 10);
+                      if (num > 300000) {
+                        num = 300000;
+                        showToast('Closing rank cannot exceed 3,00,000', 'error');
+                      }
+                      setClosingRank(num);
+                    }
+                  }}
                   className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
                 />
               </div>

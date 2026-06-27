@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authService, collegeService, branchService, categoryService, studentService } from '../services/api'
 import type { College, Branch, Category } from '../types'
+import { isValidKcetRank } from '../utils/validation'
 
 const RegisterStudying = () => {
   const navigate = useNavigate()
@@ -269,8 +270,8 @@ const RegisterStudying = () => {
         setLoading(false)
         return
       }
-      if (!formData.kcet_rank || parseInt(formData.kcet_rank, 10) <= 0) {
-        setError('Valid KCET rank is required')
+      if (!formData.kcet_rank || !isValidKcetRank(formData.kcet_rank)) {
+        setError('KCET rank must be between 1 and 400,000.')
         setLoading(false)
         return
       }
@@ -696,7 +697,8 @@ const RegisterStudying = () => {
                       value={formData.kcet_rank}
                       onChange={handleInputChange}
                       required
-                      min="1"
+                      min={1}
+                      max={400000}
                       className="w-full px-4 py-2 border border-slate-300 dark:border-gray-600 rounded-lg
                                  bg-white dark:bg-gray-700 text-slate-900 dark:text-white
                                  focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent"
