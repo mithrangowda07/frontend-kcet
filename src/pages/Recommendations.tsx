@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { counsellingService, categoryService, clusterService, collegeService, getUserId } from '../services/api'
 import { cache } from '../utils/cache'
 import type { Recommendation, Category, Cluster, CounsellingChoice } from '../types'
+import { useRecommendationsTour } from '../hooks/useRecommendationsTour'
 
 const Recommendations = () => {
   const { user } = useAuth()
@@ -37,6 +38,12 @@ const Recommendations = () => {
 
   // Mobile collapsed filter state
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true)
+
+  const { startTour } = useRecommendationsTour({
+    setIsFiltersCollapsed,
+    hasRecommendations: recommendations.length > 0,
+    isInitialLoad: !hasInitialLoaded
+  })
 
   // Mobile expanded recommendation cards state
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
@@ -340,7 +347,7 @@ const Recommendations = () => {
     const minHeightClass = isMobile ? 'min-h-[48px]' : 'min-h-[40px]'
     const ref = isMobile ? mobileClusterDropdownRef : clusterDropdownRef
     return (
-      <div ref={ref} className="relative w-full md:w-64">
+      <div ref={ref} data-tour="filter-cluster" className="relative w-full md:w-64">
         <div
           onClick={() => setIsClusterDropdownOpen(!isClusterDropdownOpen)}
           className={`flex items-center justify-between px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm ${minHeightClass}`}
@@ -441,7 +448,7 @@ const Recommendations = () => {
     const ref = isMobile ? mobileLocationDropdownRef : locationDropdownRef
 
     return (
-      <div ref={ref} className="relative w-full md:w-64">
+      <div ref={ref} data-tour="filter-location" className="relative w-full md:w-64">
         <div
           onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
           className={`flex items-center justify-between px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm ${minHeightClass}`}
@@ -714,30 +721,47 @@ const Recommendations = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
       {/* ---------------- Desktop Header ---------------- */}
-      <div className="hidden md:block mb-6">
-        <h1 className="text-3xl font-bold text-slate-800 dark:text-gray-100">
-          College Recommendation
-        </h1>
-        <p className="text-slate-600 dark:text-gray-400">
-          Welcome, <strong>{displayName}</strong>
-        </p>
-        <p className="text-slate-600 dark:text-gray-400">
-          KCET Rank:{' '}
-          <strong>{user?.kcet_rank ?? 'Not set'}</strong>
-        </p>
+      <div className="hidden md:flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800 dark:text-gray-100">
+            College Recommendation
+          </h1>
+          <p className="text-slate-600 dark:text-gray-400">
+            Welcome, <strong>{displayName}</strong>
+          </p>
+          <p className="text-slate-600 dark:text-gray-400">
+            KCET Rank:{' '}
+            <strong data-tour="kcet-rank">{user?.kcet_rank ?? 'Not set'}</strong>
+          </p>
+        </div>
+        <button
+          onClick={startTour}
+          className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-800/50 transition-colors flex items-center gap-2"
+        >
+          <span>🎯</span> Take Tour
+        </button>
       </div>
 
       {/* ---------------- Mobile Header ---------------- */}
-      <div className="md:hidden mb-5">
-        <h1 className="text-2xl font-extrabold text-slate-800 dark:text-gray-100 tracking-tight">
-          College Recommendation
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
-          Welcome, <strong className="text-slate-700 dark:text-gray-300">{displayName}</strong>
-        </p>
-        <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300">
-          KCET Rank: {user?.kcet_rank ?? 'Not set'}
+      <div className="md:hidden mb-5 flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-800 dark:text-gray-100 tracking-tight">
+            College Recommendation
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+            Welcome, <strong className="text-slate-700 dark:text-gray-300">{displayName}</strong>
+          </p>
+          <div data-tour="kcet-rank" className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-sky-950 text-blue-800 dark:text-sky-300">
+            KCET Rank: {user?.kcet_rank ?? 'Not set'}
+          </div>
         </div>
+        <button
+          onClick={startTour}
+          className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 p-2 rounded-lg text-sm font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-800/50 transition-colors"
+          title="Take Tour"
+        >
+          🎯
+        </button>
       </div>
 
       {/* ---------------- Desktop Layout Container ---------------- */}
@@ -747,7 +771,7 @@ const Recommendations = () => {
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end justify-between mb-6 bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3">
           <div className="flex flex-wrap gap-4 items-end pb-2 lg:pb-0">
             <Filter label="Category">
-              <select value={category} onChange={e => setCategory(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+              <select data-tour="filter-category" value={category} onChange={e => setCategory(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
                 <option value="">All</option>
                 {categories.map(c => (
                   <option key={c.category}>{c.category}</option>
@@ -756,7 +780,7 @@ const Recommendations = () => {
             </Filter>
 
             <Filter label="Year">
-              <select value={year} onChange={e => setYear(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+              <select data-tour="filter-year" value={year} onChange={e => setYear(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
                 {['2025', '2024', '2023', '2022'].map(y => (
                   <option key={y}>{y}</option>
                 ))}
@@ -764,7 +788,7 @@ const Recommendations = () => {
             </Filter>
 
             <Filter label="Round">
-              <select value={round} onChange={e => setRound(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
+              <select data-tour="filter-round" value={round} onChange={e => setRound(e.target.value)} className=" pr-8 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200">
                 <option value="R1">Round 1</option>
                 <option value="R2">Round 2</option>
                 <option value="R3">Round 3</option>
@@ -781,6 +805,7 @@ const Recommendations = () => {
                 
             <Filter label="Opening Rank">
               <input
+                data-tour="filter-opening-rank"
                 type="number"
                 value={openingRank}
                 onChange={e => {
@@ -802,6 +827,7 @@ const Recommendations = () => {
 
             <Filter label="Closing Rank">
               <input
+                data-tour="filter-closing-rank"
                 type="number"
                 value={closingRank}
                 onChange={e => {
@@ -824,6 +850,7 @@ const Recommendations = () => {
 
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mt-3 lg:mt-0">
             <button
+              data-tour="refresh-results"
               onClick={() => loadRecommendations(true)}
               disabled={loading || bulkAdding}
               className="bg-blue-600 dark:bg-sky-400 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 dark:hover:bg-sky-500 transition disabled:opacity-50 min-h-[40px] sm:min-h-0 flex items-center justify-center font-medium"
@@ -834,6 +861,7 @@ const Recommendations = () => {
             {recommendations.length > 0 && (
               <>
                 <button
+                  data-tour="add-selected"
                   onClick={() => handleBulkAdd(true)}
                   disabled={loading || bulkAdding || selectedPublicIds.size === 0}
                   className="bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white px-4 py-2 rounded-md text-sm transition disabled:opacity-40 min-h-[40px] sm:min-h-0 flex items-center justify-center gap-1.5 font-semibold"
@@ -842,6 +870,7 @@ const Recommendations = () => {
                 </button>
 
                 <button
+                  data-tour="add-all"
                   onClick={() => handleBulkAdd(false)}
                   disabled={loading || bulkAdding || recommendations.filter(r => !isInChoices(r.public_id)).length === 0}
                   className="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white px-4 py-2 rounded-md text-sm transition disabled:opacity-40 min-h-[40px] sm:min-h-0 flex items-center justify-center gap-1.5 font-semibold"
@@ -859,7 +888,7 @@ const Recommendations = () => {
             {loading ? 'Loading recommendations…' : 'No recommendations found'}
           </p>
         ) : (
-          <div className="overflow-x-auto max-h-[50em]">
+          <div data-tour="results-list" className="overflow-x-auto max-h-[50em]">
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
               <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr>
@@ -882,7 +911,7 @@ const Recommendations = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-800 dark:text-slate-200">
-                {recommendations.map(r => (
+                {recommendations.map((r, i) => (
                   <tr
                     key={r.public_id}
                     className="hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
@@ -890,6 +919,7 @@ const Recommendations = () => {
                     <td className="px-6 py-3">
                       {!isInChoices(r.public_id) ? (
                         <input
+                          {...(i === 0 ? { 'data-tour': 'result-checkbox' } : {})}
                           type="checkbox"
                           checked={selectedPublicIds.has(r.public_id)}
                           onChange={() => toggleSelectRow(r.public_id)}
@@ -909,6 +939,7 @@ const Recommendations = () => {
                     </td>
                     <td className="px-6 py-3">
                       <Link
+                        {...(i === 0 ? { 'data-tour': 'result-college-link' } : {})}
                         to={`/colleges/${r.college.public_id}`}
                         className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
@@ -918,6 +949,7 @@ const Recommendations = () => {
                     </td>
                     <td className="px-6 py-3">
                       <Link
+                        {...(i === 0 ? { 'data-tour': 'result-branch-link' } : {})}
                         to={`/branches/${r.public_id}`}
                         className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
@@ -925,7 +957,7 @@ const Recommendations = () => {
                         {r.branch.branch_name}
                       </Link>
                     </td>
-                    <td className="px-6 py-3">{r.cutoff}</td>
+                    <td className="px-6 py-3" {...(i === 0 ? { 'data-tour': 'result-cutoff' } : {})}>{r.cutoff}</td>
                     <td className="px-6 py-3">
                       {isInChoices(r.public_id) ? (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
@@ -933,6 +965,7 @@ const Recommendations = () => {
                         </span>
                       ) : (
                         <button
+                          {...(i === 0 ? { 'data-tour': 'add-single-choice' } : {})}
                           onClick={() => addToChoices(r.public_id)}
                           className="text-blue-600 dark:text-sky-400 hover:text-blue-800 dark:hover:text-sky-300 hover:underline"
                         >
@@ -976,6 +1009,7 @@ const Recommendations = () => {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Category</label>
                 <select
+                  data-tour="filter-category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
@@ -990,6 +1024,7 @@ const Recommendations = () => {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Year</label>
                 <select
+                  data-tour="filter-year"
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
                   className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
@@ -1003,6 +1038,7 @@ const Recommendations = () => {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Round</label>
                 <select
+                  data-tour="filter-round"
                   value={round}
                   onChange={(e) => setRound(e.target.value)}
                   className="w-full min-h-[48px] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-gray-200 text-sm"
@@ -1028,6 +1064,7 @@ const Recommendations = () => {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Opening Rank</label>
                 <input
+                  data-tour="filter-opening-rank"
                   type="number"
                   value={openingRank}
                   onChange={e => {
@@ -1050,6 +1087,7 @@ const Recommendations = () => {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Closing Rank</label>
                 <input
+                  data-tour="filter-closing-rank"
                   type="number"
                   value={closingRank}
                   onChange={e => {
@@ -1078,6 +1116,7 @@ const Recommendations = () => {
                 Reset
               </button>
               <button
+                data-tour="refresh-results"
                 onClick={() => {
                   loadRecommendations()
                   setIsFiltersCollapsed(true)
@@ -1102,6 +1141,7 @@ const Recommendations = () => {
             </button>
 
             <button
+              data-tour="add-selected"
               onClick={() => handleBulkAdd(true)}
               disabled={loading || bulkAdding || selectedPublicIds.size === 0}
               className="w-full min-h-[48px] bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white rounded-lg text-sm font-bold transition disabled:opacity-40 flex items-center justify-center gap-1.5"
@@ -1111,6 +1151,7 @@ const Recommendations = () => {
           </div>
 
           <button
+            data-tour="add-all"
             onClick={() => handleBulkAdd(false)}
             disabled={
               loading || bulkAdding || recommendations.filter((r) => !isInChoices(r.public_id)).length === 0
@@ -1143,8 +1184,8 @@ const Recommendations = () => {
             {loading ? 'Loading recommendations…' : 'No recommendations found'}
           </p>
         ) : (
-          <div className="space-y-4">
-            {recommendations.map((r) => {
+          <div data-tour="results-list" className="space-y-4">
+            {recommendations.map((r, i) => {
               const isAdded = isInChoices(r.public_id)
               const isExpanded = expandedCards.has(r.public_id)
               return (
@@ -1156,6 +1197,7 @@ const Recommendations = () => {
                     <div className="pt-0.5">
                       {!isAdded ? (
                         <input
+                          {...(i === 0 ? { 'data-tour': 'result-checkbox' } : {})}
                           type="checkbox"
                           checked={selectedPublicIds.has(r.public_id)}
                           onChange={() => toggleSelectRow(r.public_id)}
@@ -1175,7 +1217,10 @@ const Recommendations = () => {
                       <h3 className="text-sm font-bold text-slate-805 dark:text-gray-100 break-words leading-tight">
                         {r.college.college_name}
                       </h3>
-                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 break-words font-medium">
+                      <p
+                        {...(i === 0 ? { 'data-tour': 'result-branch-link' } : {})}
+                        className="text-xs text-slate-500 dark:text-gray-400 mt-1 break-words font-medium"
+                      >
                         {r.branch.branch_name}
                       </p>
                     </div>
@@ -1208,7 +1253,7 @@ const Recommendations = () => {
 
                       <div className="flex justify-between">
                         <span className="font-semibold text-slate-400 dark:text-slate-505">{round} Cutoff:</span>
-                        <span className="font-bold text-slate-800 dark:text-gray-200">{r.cutoff}</span>
+                        <span className="font-bold text-slate-800 dark:text-gray-200" {...(i === 0 ? { 'data-tour': 'result-cutoff' } : {})}>{r.cutoff}</span>
                       </div>
 
                       <div className="flex justify-between items-center">
@@ -1226,6 +1271,7 @@ const Recommendations = () => {
 
                       <div className="flex flex-col gap-2 pt-3">
                         <Link
+                          {...(i === 0 ? { 'data-tour': 'result-college-link' } : {})}
                           to={`/colleges/${r.college.public_id}`}
                           className="w-full min-h-[48px] bg-slate-105 dark:bg-slate-800 text-slate-700 dark:text-gray-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg flex items-center justify-center font-semibold text-sm transition"
                         >
@@ -1234,6 +1280,7 @@ const Recommendations = () => {
 
                         {!isAdded && (
                           <button
+                            {...(i === 0 ? { 'data-tour': 'add-single-choice' } : {})}
                             onClick={() => addToChoices(r.public_id)}
                             className="w-full min-h-[48px] bg-blue-600 hover:bg-blue-750 dark:bg-sky-500 dark:hover:bg-sky-600 text-white rounded-lg flex items-center justify-center font-semibold text-sm transition"
                           >
