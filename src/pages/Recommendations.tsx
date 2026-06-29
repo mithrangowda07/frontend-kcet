@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { counsellingService, categoryService, clusterService, collegeService, getUserId } from '../services/api'
 import { cache } from '../utils/cache'
 import type { Recommendation, Category, Cluster, CounsellingChoice } from '../types'
+import { Atom } from "react-loading-indicators";
 import { useRecommendationsTour } from '../hooks/useRecommendationsTour'
 
 const Recommendations = () => {
@@ -884,9 +885,24 @@ const Recommendations = () => {
 
         {/* -------- Table -------- */}
         {recommendations.length === 0 ? (
-          <p className="text-slate-500 dark:text-gray-400">
-            {loading ? 'Loading recommendations…' : 'No recommendations found'}
-          </p>
+          <div className="flex flex-col items-center justify-center py-6">
+            {loading ? (
+              <>
+                <Atom
+                  color="#db8e42"
+                  size="large"
+                />
+
+                <p className="mt-3 text-center text-lg font-medium text-[#5f7cca] dark:text-blue-400">
+                  Loading recommendations...
+                </p>
+              </>
+            ) : (
+              <p className="text-center text-slate-500 dark:text-gray-400">
+                No recommendations found
+              </p>
+            )}
+          </div>
         ) : (
           <div data-tour="results-list" className="overflow-x-auto max-h-[50em]">
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
@@ -1180,9 +1196,24 @@ const Recommendations = () => {
 
         {/* -------- Recommendation Cards List -------- */}
         {recommendations.length === 0 ? (
-          <p className="text-slate-500 dark:text-gray-400 text-sm text-center py-8">
-            {loading ? 'Loading recommendations…' : 'No recommendations found'}
-          </p>
+          <div className="flex flex-col items-center justify-center py-6">
+            {loading ? (
+              <>
+                <Atom
+                  color="#db8e42"
+                  size="large"
+                />
+
+                <p className="mt-3 text-center text-sm font-medium text-[#5f7cca] dark:text-blue-400">
+                  Loading recommendations...
+                </p>
+              </>
+            ) : (
+              <p className="text-center text-slate-500 dark:text-gray-400">
+                No recommendations found
+              </p>
+            )}
+          </div>
         ) : (
           <div data-tour="results-list" className="space-y-4">
             {recommendations.map((r, i) => {
