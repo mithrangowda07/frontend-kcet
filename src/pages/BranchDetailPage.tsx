@@ -5,6 +5,7 @@ import { branchService, reviewService } from "../services/api";
 import StarRating from "../components/StarRating";
 import CustomTooltip from "../components/charts/CustomTooltip";
 import type { Branch, Review, BranchInsightsResponse } from "../types";
+import { LoadingIndicator } from "../components/application/loading-indicator/loading-indicator";
 import {
   LineChart,
   Line,
@@ -571,9 +572,15 @@ const BranchDetailPage = () => {
   );
 
   if (loading)
-    return (
-      <div className="p-8 text-slate-600 dark:text-gray-400">Loading…</div>
-    );
+  return (
+    <div className="flex items-center justify-center min-h-[300px] text-slate-600 dark:text-gray-300">
+      <LoadingIndicator
+        type="dot-circle"
+        size="md"
+        label="Loading recommendations..."
+      />
+    </div>
+  );
   if (!branch)
     return (
       <div className="p-8 text-slate-600 dark:text-gray-400">

@@ -4,6 +4,7 @@ import { collegeService, counsellingService, getUserId } from "../services/api";
 import { cache } from "../utils/cache";
 import { useAuth } from "../contexts/AuthContext";
 import type { Branch } from "../types";
+import { LoadingIndicator } from "../components/application/loading-indicator/loading-indicator";
 
 const CollegeDetailPage = () => {
   const { publicId } = useParams<{ publicId: string }>();
@@ -53,9 +54,16 @@ const CollegeDetailPage = () => {
     }
   };
 
-  if (!college) {
-    return <div className="text-center py-12">Loading...</div>;
-  }
+  if (!college)
+  return (
+    <div className="flex items-center justify-center min-h-[300px] text-slate-600 dark:text-gray-300">
+      <LoadingIndicator
+        type="dot-circle"
+        size="md"
+        label="Loading recommendations..."
+      />
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
