@@ -60,7 +60,7 @@ const CollegeDetailPage = () => {
       <LoadingIndicator
         type="dot-circle"
         size="md"
-        label="Loading recommendations..."
+        label="Loading College Details..."
       />
     </div>
   );

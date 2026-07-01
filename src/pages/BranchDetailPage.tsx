@@ -577,7 +577,7 @@ const BranchDetailPage = () => {
       <LoadingIndicator
         type="dot-circle"
         size="md"
-        label="Loading recommendations..."
+        label="Loading Branch Details..."
       />
     </div>
   );
